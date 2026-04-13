@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/matoi/AppData/Roaming/Code/User/**)"
+    ]
+  }
+}
