@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Read(//c/Users/matoi/AppData/Roaming/Code/User/**)"
+      "Read(//c/Users/matoi/AppData/Roaming/Code/User/**)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }
