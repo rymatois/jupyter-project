@@ -8,11 +8,21 @@
 Example:
     基本的な使い方::
 
-        analyzer = AnalyzeIris()                    # Irisデータセット（デフォルト）
-        analyzer = AnalyzeIris(load_wine())         # 他のデータセットも可
-        analyzer.pair_plot()
-        analyzer.all_supervised()
-        best_model, best_score = analyzer.best_supervised()
+        analyzer = ClassifierAnalyzer()                    # Irisデータセット（デフォルト）
+        analyzer = ClassifierAnalyzer(load_wine())         # 他のデータセットも可
+        analyzer.plot_pairwise_scatter()
+        analyzer.print_cv_scores()
+        best_model, best_score = analyzer.get_best_model()
+
+    モデルを追加したい場合（DEFAULT_CLASSIFIERSに連結する）::
+
+        from sklearn.linear_model import RidgeClassifier
+        from sklearn.datasets import load_wine
+        wine = ClassifierAnalyzer(
+            dataset=load_wine(),
+            classifiers=DEFAULT_CLASSIFIERS + [("RidgeClassifier", RidgeClassifier())],
+        )
+        wine.print_cv_scores()
 """
 
 import inspect
@@ -54,7 +64,7 @@ DEFAULT_CLASSIFIERS = [
 ]
 
 
-class AnalyzeIris:
+class ClassifierAnalyzer:
     """分類データセットの分析・可視化・モデル評価を行うクラス。
 
     Args:
@@ -79,7 +89,7 @@ class AnalyzeIris:
             classifiers if classifiers is not None else DEFAULT_CLASSIFIERS
         )
 
-    def describe(self):
+    def print_methods(self):
         """使用可能なメソッドの一覧と説明を表示する。
 
         ``_`` で始まる内部メソッドを除いた全パブリックメソッドについて、
@@ -101,7 +111,7 @@ class AnalyzeIris:
             print("  {}{}".format(name, sig))
             print("    → {}\n".format(summary))
 
-    def summary(self):
+    def print_dataset_info(self):
         """データセットの概要をコンソールに出力する。
 
         サンプル数・特徴量数・クラス数・クラス分布・特徴量の基本統計量を表示する。
@@ -125,7 +135,7 @@ class AnalyzeIris:
         print("\n特徴量の統計:")
         print(self.feature_df.describe().round(3))
 
-    def get(self, head=None):
+    def get_labeled_df(self, head=None):
         """ラベル列を付加したDataFrameを返す。
 
         Args:
@@ -140,7 +150,7 @@ class AnalyzeIris:
             return labeled_df.head(head)
         return labeled_df
 
-    def get_correlation(self):
+    def get_correlation_matrix(self):
         """特徴量間の相関係数行列を返す。
 
         Returns:
@@ -148,14 +158,14 @@ class AnalyzeIris:
         """
         return self.feature_df.corr()
 
-    def pair_plot(self, diag_kind="hist"):
-        """ペアプロットを表示する。
+    def plot_pairwise_scatter(self, diag_kind="hist"):
+        """全特徴量の組み合わせを散布図で表示する。
 
         Args:
             diag_kind (str): 対角成分のグラフ種別。``"hist"`` または
                 ``"kde"`` を指定する。デフォルトは ``"hist"``。
         """
-        labeled_df = self.get()
+        labeled_df = self.get_labeled_df()
         label_map = {i: name for i, name in enumerate(self.dataset.target_names)}
         labeled_df["LabelName"] = labeled_df["Label"].map(label_map)
         sns.pairplot(
@@ -208,7 +218,7 @@ class AnalyzeIris:
 
         return cv_results
 
-    def all_supervised(self, n_neighbors=4):
+    def print_cv_scores(self, n_neighbors=4):
         """全分類モデルの交差検証スコアをコンソールに出力する。
 
         Args:
@@ -230,7 +240,7 @@ class AnalyzeIris:
                 )
             print()
 
-    def get_supervised(self):
+    def get_cv_score_df(self):
         """全分類モデルのテストスコアをDataFrameで返す。
 
         Returns:
@@ -245,7 +255,7 @@ class AnalyzeIris:
         }
         return pd.DataFrame(test_score_dict)
 
-    def best_supervised(self):
+    def get_best_model(self):
         """平均テストスコアが最も高い分類モデルを返す。
 
         Returns:
@@ -254,18 +264,18 @@ class AnalyzeIris:
                 - best_model_name (str): 最良モデルの名前。
                 - best_mean_score (float): 最良モデルの平均テストスコア。
         """
-        score_stats_df = self.get_supervised().describe()
+        score_stats_df = self.get_cv_score_df().describe()
         best_model_name = score_stats_df.loc["mean"].idxmax()
         best_mean_score = score_stats_df.loc["mean"].max()
 
         return (best_model_name, best_mean_score)
 
-    def plot_score_comparison(self):
+    def plot_model_score_comparison(self):
         """全分類モデルの平均テストスコアを棒グラフで比較表示する。
 
         各モデルの平均スコアを棒グラフで、標準偏差をエラーバーで表示する。
         """
-        score_df = self.get_supervised()
+        score_df = self.get_cv_score_df()
         means = score_df.mean()
         stds = score_df.std()
 
@@ -278,7 +288,7 @@ class AnalyzeIris:
         plt.tight_layout()
         plt.show()
 
-    def plot_feature_importances_all(self, tree_classifiers=None):
+    def plot_feature_importances(self, tree_classifiers=None):
         """木ベースの分類モデルの特徴量重要度を棒グラフで表示する。
 
         Args:
@@ -307,7 +317,7 @@ class AnalyzeIris:
             plt.title(model_name)
             plt.show()
 
-    def visualize_decision_tree(self):
+    def plot_decision_tree(self):
         """決定木の構造を可視化して表示する。
 
         DecisionTreeClassifierを全データで学習し、木構造を図示する。
@@ -333,3 +343,21 @@ class AnalyzeIris:
         plt.show()
 
         return tree_artists
+
+
+# ------------------------------------------------------------
+# リネーム履歴
+# ------------------------------------------------------------
+# メソッド名
+#   describe()                     -> print_methods()
+#   summary()                      -> print_dataset_info()
+#   get()                          -> get_labeled_df()
+#   get_correlation()              -> get_correlation_matrix()
+#   pair_plot()                    -> plot_pairwise_scatter()
+#   all_supervised()               -> print_cv_scores()
+#   get_supervised()               -> get_cv_score_df()
+#   best_supervised()              -> get_best_model()
+#   plot_score_comparison()        -> plot_model_score_comparison()
+#   plot_feature_importances_all() -> plot_feature_importances()
+#   visualize_decision_tree()      -> plot_decision_tree()
+# ------------------------------------------------------------
