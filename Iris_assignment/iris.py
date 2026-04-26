@@ -8,17 +8,16 @@
 Example:
     基本的な使い方::
 
-        analyzer = AnalyzeIris()
-        analyzer.pair_plot()
-        analyzer.all_supervised()
-        best_model, best_score = analyzer.best_supervised()
-
-Attributes:
-    iris_dataset (sklearn.utils.Bunch): sklearnから読み込んだIrisデータセット。
-    LABEL_NAME_MAP (dict): ラベル番号と種名のマッピング。
+        iris = AnalyzeIris()
+        iris.get()
+        iris.all_supervised()
+        best_method, best_score = iris.best_supervised()
 """
 
+from __future__ import annotations
+
 import warnings
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,212 +31,313 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.utils import Bunch
 
 pd.set_option("display.max_rows", None)
 warnings.filterwarnings("ignore")
 
-iris_dataset = load_iris()
+RANDOM_STATE: int = 0
+"""再現性を保つために全モデルで共通利用する乱数シード。"""
 
-LABEL_NAME_MAP = {0: "setosa", 1: "versicolor", 2: "virginica"}
-"""dict: ラベル番号と種名のマッピング。"""
+DEFAULT_N_NEIGHBORS: int = 4
+"""KNeighborsClassifierで使用するデフォルトの近傍数。"""
+
+CV_SPLITS: int = 5
+"""交差検証の分割数。"""
+
+IRIS_DATASET: Bunch = load_iris()
+
+DEFAULT_CLASSIFIERS: dict[str, Any] = {
+    "LogisticRegression": LogisticRegression(max_iter=1000),
+    "LinearSVC": LinearSVC(max_iter=10000, random_state=RANDOM_STATE),
+    "SVC": SVC(),
+    "DecisionTreeClassifier": DecisionTreeClassifier(random_state=RANDOM_STATE),
+    "KNeighborsClassifier": KNeighborsClassifier(
+        n_neighbors=DEFAULT_N_NEIGHBORS,
+    ),
+    "RandomForestClassifier": RandomForestClassifier(random_state=RANDOM_STATE),
+    "GradientBoostingClassifier": GradientBoostingClassifier(
+        random_state=RANDOM_STATE,
+    ),
+    "MLPClassifier": MLPClassifier(max_iter=2000, random_state=RANDOM_STATE),
+}
+
+DEFAULT_TREE_CLASSIFIERS: dict[str, Any] = {
+    "DecisionTreeClassifier": DecisionTreeClassifier(random_state=RANDOM_STATE),
+    "RandomForestClassifier": RandomForestClassifier(random_state=RANDOM_STATE),
+    "GradientBoostingClassifier": GradientBoostingClassifier(
+        random_state=RANDOM_STATE,
+    ),
+}
 
 
 class AnalyzeIris:
     """Irisデータセットの分析・可視化・モデル評価を行うクラス。
 
     Attributes:
-        feature_df (pd.DataFrame): 特徴量のみのDataFrame（ラベルなし）。
+        dataset: 読み込んだIrisデータセット。
+        df_feature (pd.DataFrame): 特徴量のみのDataFrame（ラベルなし）。
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Irisデータセットを読み込み、特徴量DataFrameを初期化する。"""
-        self.feature_df = pd.DataFrame(
-            iris_dataset.data, columns=iris_dataset.feature_names
+        self.dataset: Bunch = IRIS_DATASET
+        self.df_feature: pd.DataFrame = pd.DataFrame(
+            self.dataset.data,
+            columns=self.dataset.feature_names,
         )
 
-    def get(self):
+    def _validate_diag_kind(
+        self,
+        diag_kind: Literal["auto", "hist", "kde"] | None,
+    ) -> None:
+        """pairplotの対角要素の描画方法を確認する。
+
+        Args:
+            diag_kind (Literal["auto", "hist", "kde"] | None): 対角要素の描画方法。
+
+        Raises:
+            ValueError: ``diag_kind`` が使用可能な候補以外の場合。
+        """
+        if diag_kind not in {"auto", "hist", "kde", None}:
+            raise ValueError(
+                "diag は 'auto', 'hist', 'kde', None のいずれかです。"
+                f" 受け取った値: {diag_kind!r}"
+            )
+
+    def _validate_n_neighbors(self, n_neighbors: int) -> None:
+        """KNeighborsClassifierの近傍数を確認する。
+
+        Args:
+            n_neighbors (int): KNeighborsClassifierの近傍数。
+
+        Raises:
+            ValueError: ``n_neighbors`` が使用可能な範囲外の場合。
+        """
+        if isinstance(n_neighbors, bool) or not isinstance(n_neighbors, int):
+            raise ValueError("n_neighbors はint型です。")
+        if n_neighbors < 1:
+            raise ValueError("n_neighbors は1以上のint型です。")
+
+        int_train_sample_count = len(self.df_feature) * (CV_SPLITS - 1) // CV_SPLITS
+        if n_neighbors > int_train_sample_count:
+            raise ValueError(
+                "n_neighbors が大きすぎます。"
+                f" {CV_SPLITS}分割交差検証では {int_train_sample_count} 以下にしてください。"
+            )
+
+    def get(self, head: int | None = None) -> pd.DataFrame:
         """ラベル列を付加したDataFrameを返す。
+
+        Args:
+            head (int | None): 先頭から返す行数。``None`` の場合は全行を返す。
 
         Returns:
             pd.DataFrame: ラベル列（Label）を含むDataFrame。
         """
-        labeled_df = self.feature_df.copy()
-        labeled_df["Label"] = iris_dataset.target
-        return labeled_df
+        df_labeled: pd.DataFrame = self.df_feature.copy()
+        df_labeled["Label"] = self.dataset.target
 
-    def get_correlation(self):
+        if head is not None:
+            return df_labeled.head(head)
+        return df_labeled
+
+    def get_correlation(self) -> pd.DataFrame:
         """特徴量間の相関係数行列を返す。
 
         Returns:
             pd.DataFrame: 特徴量間の相関係数を格納したDataFrame。
         """
-        correlation_matrix = self.feature_df.corr()
-        return correlation_matrix
+        return self.df_feature.corr()
 
-    def pair_plot(self, diag_kind="hist"):
-        """ペアプロットを表示する。
+    def pair_plot(
+        self,
+        diag_kind: Literal["auto", "hist", "kde"] | None = "hist",
+    ) -> None:
+        """全特徴量の組み合わせを散布図で表示する。
 
         Args:
-            diag_kind (str): 対角成分のグラフ種別。``"hist"`` または
-                ``"kde"`` を指定する。デフォルトは ``"hist"``。
+            diag_kind (Literal["auto", "hist", "kde"] | None): 対角成分の
+                グラフ種別。``"auto"``, ``"hist"``, ``"kde"``, ``None`` を
+                指定する。デフォルトは ``"hist"``。
+
+        Raises:
+            ValueError: ``diag_kind`` が使用可能な候補以外の場合。
         """
-        labeled_df = self.get()
-        labeled_df["LabelName"] = labeled_df["Label"].map(LABEL_NAME_MAP)
+        self._validate_diag_kind(diag_kind)
+
+        df_labeled: pd.DataFrame = self.get()
+        dict_label_name: dict[int, str] = {
+            int(index): str(label_name)
+            for index, label_name in enumerate(self.dataset.target_names)
+        }
+        df_labeled["LabelName"] = df_labeled["Label"].map(dict_label_name)
+
         sns.pairplot(
-            labeled_df.drop(columns=["Label"]),
+            df_labeled.drop(columns=["Label"]),
             hue="LabelName",
             diag_kind=diag_kind,
         )
         plt.show()
 
-    def _build_classifier_list(self, n_neighbors):
-        """評価対象の分類モデル一覧を生成する。
-
-        Args:
-            n_neighbors (int): KNeighborsClassifierの近傍数。
-
-        Returns:
-            list: (モデル名 (str), モデルインスタンス) のタプルのリスト。
-        """
-        return [
-            ("LogisticRegression", LogisticRegression(max_iter=1000)),
-            ("LinearSVC", LinearSVC(max_iter=10000)),
-            ("SVC", SVC()),
-            ("DecisionTreeClassifier", DecisionTreeClassifier()),
-            ("KNeighborsClassifier", KNeighborsClassifier(n_neighbors=n_neighbors)),
-            ("RandomForestClassifier", RandomForestClassifier()),
-            ("GradientBoostingClassifier", GradientBoostingClassifier()),
-            ("MLPClassifier", MLPClassifier(max_iter=2000)),
-        ]
-
-    def calc_cv_scores(self, n_neighbors=4):
+    def calc_supervised_scores(
+        self,
+        n_neighbors: int = DEFAULT_N_NEIGHBORS,
+    ) -> dict[str, dict[str, np.ndarray]]:
         """全分類モデルに対して交差検証スコアを計算する。
 
         Args:
-            n_neighbors (int): KNeighborsClassifierの近傍数。
-                デフォルトは4。
+            n_neighbors (int): KNeighborsClassifierの近傍数。デフォルトは4。
 
         Returns:
-            dict: モデル名 (str) をキー、cross_validateの結果 (dict) を
-                値とするdict。
+            dict[str, dict[str, np.ndarray]]: モデル名をキー、cross_validateの
+                結果を値とするdict。
+
+        Raises:
+            ValueError: ``n_neighbors`` がint型でないか、1未満か、
+                交差検証で扱える件数を超える場合。
         """
-        classifiers = self._build_classifier_list(n_neighbors)
-        X = self.feature_df
-        y = iris_dataset.target
+        self._validate_n_neighbors(n_neighbors)
 
-        cv_results = {}
-        for model_name, classifier in classifiers:
-            result = cross_validate(classifier, X, y, cv=5, return_train_score=True)
-            cv_results[model_name] = result
+        dict_classifier: dict[str, Any] = DEFAULT_CLASSIFIERS.copy()
+        dict_classifier["KNeighborsClassifier"] = KNeighborsClassifier(
+            n_neighbors=n_neighbors,
+        )
 
-        return cv_results
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
+        dict_results: dict[str, dict[str, np.ndarray]] = {}
 
-    def all_supervised(self, n_neighbors=4):
+        for str_classifier_name, classifier in dict_classifier.items():
+            dict_results[str_classifier_name] = cross_validate(
+                classifier,
+                df_feature,
+                ndarray_target,
+                cv=CV_SPLITS,
+                return_train_score=True,
+            )
+
+        return dict_results
+
+    def all_supervised(self, n_neighbors: int = DEFAULT_N_NEIGHBORS) -> None:
         """全分類モデルの交差検証スコアをコンソールに出力する。
 
         Args:
-            n_neighbors (int): KNeighborsClassifierの近傍数。
-                デフォルトは4。
-        """
-        cv_results = self.calc_cv_scores(n_neighbors)
+            n_neighbors (int): KNeighborsClassifierの近傍数。デフォルトは4。
 
-        for model_name, result in cv_results.items():
-            print("== {} ==".format(model_name))
+        Raises:
+            ValueError: ``n_neighbors`` がint型でないか、1未満か、
+                交差検証で扱える件数を超える場合。
+        """
+        dict_results = self.calc_supervised_scores(n_neighbors)
+
+        for str_classifier_name, dict_score in dict_results.items():
+            print("== {} ==".format(str_classifier_name))
             for test_score, train_score in zip(
-                result["test_score"],
-                result["train_score"],
+                dict_score["test_score"],
+                dict_score["train_score"],
             ):
                 print(
                     "test score: {:.3f}, train score: {:.3f}".format(
-                        test_score, train_score
+                        test_score,
+                        train_score,
                     )
                 )
             print()
 
-    def get_supervised(self):
+    def get_supervised(
+        self,
+        n_neighbors: int = DEFAULT_N_NEIGHBORS,
+    ) -> pd.DataFrame:
         """全分類モデルのテストスコアをDataFrameで返す。
+
+        Args:
+            n_neighbors (int): KNeighborsClassifierの近傍数。デフォルトは4。
 
         Returns:
             pd.DataFrame: モデル名を列名、各foldのテストスコアを行とする
                 DataFrame。
+
+        Raises:
+            ValueError: ``n_neighbors`` がint型でないか、1未満か、
+                交差検証で扱える件数を超える場合。
         """
-        cv_results = self.calc_cv_scores()
+        dict_results = self.calc_supervised_scores(n_neighbors)
+        dict_test_score: dict[str, np.ndarray] = {}
 
-        test_score_dict = {
-            model_name: result["test_score"]
-            for model_name, result in cv_results.items()
-        }
-        return pd.DataFrame(test_score_dict)
+        for str_classifier_name, dict_score in dict_results.items():
+            dict_test_score[str_classifier_name] = dict_score["test_score"]
 
-    def best_supervised(self):
+        return pd.DataFrame(dict_test_score)
+
+    def best_supervised(
+        self,
+        n_neighbors: int = DEFAULT_N_NEIGHBORS,
+    ) -> tuple[str, float]:
         """平均テストスコアが最も高い分類モデルを返す。
 
+        Args:
+            n_neighbors (int): KNeighborsClassifierの近傍数。デフォルトは4。
+
         Returns:
-            tuple: 以下の要素を持つタプル。
+            tuple[str, float]: 以下の要素を持つタプル。
 
-                - best_model_name (str): 最良モデルの名前。
-                - best_mean_score (float): 最良モデルの平均テストスコア。
+                - str_best_method (str): 最良モデルの名前。
+                - float_best_score (float): 最良モデルの平均テストスコア。
+
+        Raises:
+            ValueError: ``n_neighbors`` がint型でないか、1未満か、
+                交差検証で扱える件数を超える場合。
         """
-        score_stats_df = self.get_supervised().describe()
-        best_model_name = score_stats_df.loc["mean"].idxmax()
-        best_mean_score = score_stats_df.loc["mean"].max()
+        df_score = self.get_supervised(n_neighbors).describe()
+        str_best_method: str = str(df_score.loc["mean"].idxmax())
+        float_best_score: float = float(df_score.loc["mean"].max())
+        return (str_best_method, float_best_score)
 
-        return (best_model_name, best_mean_score)
+    def plot_feature_importances_all(self) -> None:
+        """木ベースの分類モデルの特徴量重要度を棒グラフで表示する。"""
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
 
-    def plot_feature_importances_all(self):
-        """木ベースの分類モデルの特徴量重要度を棒グラフで表示する。
+        for str_classifier_name, classifier in DEFAULT_TREE_CLASSIFIERS.items():
+            classifier.fit(df_feature, ndarray_target)
 
-        DecisionTreeClassifier、RandomForestClassifier、
-        GradientBoostingClassifierの特徴量重要度をそれぞれ描画する。
-        """
-        X = self.feature_df
-        y = iris_dataset.target
-
-        tree_classifiers = [
-            ("DecisionTreeClassifier", DecisionTreeClassifier(random_state=0)),
-            ("RandomForestClassifier", RandomForestClassifier(random_state=0)),
-            ("GradientBoostingClassifier", GradientBoostingClassifier(random_state=0)),
-        ]
-
-        for model_name, classifier in tree_classifiers:
-            classifier.fit(X, y)
-
-            n_features = X.shape[1]
+            int_feature_count: int = df_feature.shape[1]
             plt.figure()
             plt.barh(
-                range(n_features),
+                range(int_feature_count),
                 classifier.feature_importances_,
                 align="center",
             )
-            plt.yticks(np.arange(n_features), X.columns)
+            plt.yticks(np.arange(int_feature_count), df_feature.columns)
             plt.xlabel("Feature importance")
             plt.ylabel("Feature")
-            plt.title(model_name)
+            plt.title(str_classifier_name)
             plt.show()
 
-    def visualize_decision_tree(self):
+    def visualize_decision_tree(self) -> list[Any]:
         """決定木の構造を可視化して表示する。
 
         DecisionTreeClassifierを全データで学習し、木構造を図示する。
 
         Returns:
-            list: plot_treeが返すArtistオブジェクトのリスト。
+            list[Any]: plot_treeが返すArtistオブジェクトのリスト。
         """
-        X = self.feature_df
-        y = iris_dataset.target
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
 
-        classifier = DecisionTreeClassifier(random_state=0)
-        classifier.fit(X, y)
+        classifier = DecisionTreeClassifier(random_state=RANDOM_STATE)
+        classifier.fit(df_feature, ndarray_target)
 
         plt.figure(figsize=(16, 10))
-        tree_artists = plot_tree(
+        list_graph = plot_tree(
             classifier,
-            feature_names=X.columns,
-            class_names=iris_dataset.target_names,
+            feature_names=df_feature.columns,
+            class_names=self.dataset.target_names,
             filled=True,
             rounded=True,
             fontsize=10,
         )
         plt.show()
 
-        return tree_artists
+        return list_graph
