@@ -17,7 +17,6 @@ Example:
 from __future__ import annotations
 
 import warnings
-from itertools import combinations
 from typing import Any, Literal
 
 import matplotlib.pyplot as plt
@@ -27,12 +26,11 @@ import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.datasets import load_iris
-from sklearn.decomposition import NMF, PCA
+from sklearn.decomposition import PCA
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.model_selection import StratifiedKFold, cross_validate
-from sklearn.manifold import TSNE
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import MinMaxScaler, Normalizer, RobustScaler, StandardScaler
@@ -516,12 +514,8 @@ class AnalyzeIris:
                     "========================================================================="
                 )
 
-            list_feature_pairs = list(combinations(range(df_feature.shape[1]), 2))
-            fig, ndarray_axes = plt.subplots(
-                len(list_feature_pairs),
-                len(DEFAULT_SCALERS),
-                figsize=(20, 24),
-            )
+            fig, list_axes = plt.subplots(2, 3, figsize=(15, 8))
+            list_axes_flat = list_axes.flatten()
 
             for int_idx, (str_scaler_name, scaler) in enumerate(
                 DEFAULT_SCALERS.items()
@@ -561,28 +555,21 @@ class AnalyzeIris:
                     }
                 )
 
-                for int_pair_idx, (int_x_idx, int_y_idx) in enumerate(
-                    list_feature_pairs
-                ):
-                    ax = ndarray_axes[int_pair_idx, int_idx]
-                    ax.scatter(
-                        ndarray_x_train_scaled[:, int_x_idx],
-                        ndarray_x_train_scaled[:, int_y_idx],
-                        c="blue",
-                        marker="o",
-                        s=35,
-                    )
-                    ax.scatter(
-                        ndarray_x_test_scaled[:, int_x_idx],
-                        ndarray_x_test_scaled[:, int_y_idx],
-                        c="red",
-                        marker="^",
-                        s=45,
-                    )
-                    ax.set_title(str_scaler_name)
-                    ax.set_xlabel(df_feature.columns[int_x_idx])
-                    ax.set_ylabel(df_feature.columns[int_y_idx])
+                ax = list_axes_flat[int_idx]
+                scatter = ax.scatter(
+                    ndarray_x_train_scaled[:, 0],
+                    ndarray_x_train_scaled[:, 1],
+                    c=ndarray_y_train,
+                    cmap="viridis",
+                    edgecolor="k",
+                    s=40,
+                )
+                ax.set_title("fold={} / {}".format(int_fold, str_scaler_name))
+                ax.set_xlabel(df_feature.columns[0])
+                ax.set_ylabel(df_feature.columns[1])
 
+            list_axes_flat[5].axis("off")
+            fig.colorbar(scatter, ax=list_axes_flat[:5], shrink=0.8)
             fig.tight_layout()
             plt.show()
 
@@ -591,211 +578,11 @@ class AnalyzeIris:
         )
         return pd.DataFrame(list_records)
 
-    def plot_pca(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, PCA]:
-        """StandardScaler後にPCAを適用し、結果を可視化する。
-
-        Args:
-            n_components (int): 主成分の数。デフォルトは2。
-
-        Returns:
-            tuple[pd.DataFrame, pd.DataFrame, PCA]: 以下の要素を持つタプル。
-
-                - df_x_scaled (pd.DataFrame): 標準化後の特徴量DataFrame。
-                - df_pca (pd.DataFrame): 主成分得点のDataFrame。
-                - pca (PCA): 学習済みのPCAインスタンス。
-        """
-        self._validate_positive_int(
-            n_components,
-            "n_components",
-            upper_bound=self.df_feature.shape[1],
-        )
-
-        scaler = StandardScaler()
-        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
-        df_x_scaled = pd.DataFrame(
-            ndarray_x_scaled,
-            columns=self.df_feature.columns,
-        )
-
-        pca = PCA(n_components=n_components, random_state=RANDOM_STATE)
-        ndarray_pca = pca.fit_transform(ndarray_x_scaled)
-        list_pc_columns = [
-            "PC{}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
-        df_pca = pd.DataFrame(ndarray_pca, columns=list_pc_columns)
-
-        plt.figure(figsize=(8, 6))
-        list_markers = ["o", "^", "v"]
-        for int_label, (str_target_name, str_marker) in enumerate(
-            zip(self.dataset.target_names, list_markers)
-        ):
-            ndarray_label_mask = self.dataset.target == int_label
-            plt.scatter(
-                ndarray_pca[ndarray_label_mask, 0],
-                (
-                    ndarray_pca[ndarray_label_mask, 1]
-                    if n_components >= 2
-                    else np.zeros(np.sum(ndarray_label_mask))
-                ),
-                marker=str_marker,
-                s=60,
-                label=str_target_name,
-            )
-        plt.xlabel("First component")
-        plt.ylabel("Second component" if n_components >= 2 else "")
-        plt.legend(loc="best")
-        plt.show()
-
-        list_component_names = [
-            "First component",
-            "Second component",
-            "Third component",
-            "Fourth component",
-        ]
-        list_y_labels = [
-            list_component_names[int_idx]
-            if int_idx < len(list_component_names)
-            else "Component {}".format(int_idx + 1)
-            for int_idx in range(n_components)
-        ]
-
-        plt.matshow(pca.components_, cmap="viridis")
-        plt.yticks(range(n_components), list_y_labels)
-        plt.colorbar()
-        plt.xticks(
-            range(len(self.df_feature.columns)),
-            self.df_feature.columns,
-            rotation=60,
-            ha="left",
-        )
-        plt.xlabel("Feature")
-        plt.ylabel("PCA components")
-        plt.show()
-
-        return (df_x_scaled, df_pca, pca)
-
-    def plot_nmf(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, NMF]:
-        """MinMaxScaler後にNMFを適用し、結果を可視化する。
-
-        NMFは非負値を要求するため、MinMaxScalerで0以上にスケーリングしてから
-        分解を行う。
-
-        Args:
-            n_components (int): 成分数。デフォルトは2。
-
-        Returns:
-            tuple[pd.DataFrame, pd.DataFrame, NMF]: 以下の要素を持つタプル。
-
-                - df_x_scaled (pd.DataFrame): スケーリング後の特徴量DataFrame。
-                - df_nmf (pd.DataFrame): NMFで変換した結果のDataFrame。
-                - nmf (NMF): 学習済みのNMFインスタンス。
-        """
-        self._validate_positive_int(
-            n_components,
-            "n_components",
-            upper_bound=self.df_feature.shape[1],
-        )
-
-        scaler = MinMaxScaler()
-        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
-        df_x_scaled = pd.DataFrame(
-            ndarray_x_scaled,
-            columns=self.df_feature.columns,
-        )
-
-        nmf = NMF(
-            n_components=n_components,
-            random_state=RANDOM_STATE,
-            max_iter=1000,
-        )
-        ndarray_nmf = nmf.fit_transform(ndarray_x_scaled)
-        list_nmf_columns = [
-            "NMF{}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
-        df_nmf = pd.DataFrame(ndarray_nmf, columns=list_nmf_columns)
-
-        plt.figure(figsize=(8, 6))
-        list_markers = ["o", "^", "v"]
-        for int_label, (str_target_name, str_marker) in enumerate(
-            zip(self.dataset.target_names, list_markers)
-        ):
-            ndarray_label_mask = self.dataset.target == int_label
-            plt.scatter(
-                ndarray_nmf[ndarray_label_mask, 0],
-                (
-                    ndarray_nmf[ndarray_label_mask, 1]
-                    if n_components >= 2
-                    else np.zeros(np.sum(ndarray_label_mask))
-                ),
-                marker=str_marker,
-                s=60,
-                label=str_target_name,
-            )
-        plt.xlabel("First component")
-        plt.ylabel("Second component" if n_components >= 2 else "")
-        plt.legend(loc="best")
-        plt.show()
-
-        list_component_names = [
-            "First component",
-            "Second component",
-            "Third component",
-            "Fourth component",
-        ]
-        list_y_labels = [
-            list_component_names[int_idx]
-            if int_idx < len(list_component_names)
-            else "Component {}".format(int_idx + 1)
-            for int_idx in range(n_components)
-        ]
-
-        plt.matshow(nmf.components_, cmap="viridis")
-        plt.yticks(range(n_components), list_y_labels)
-        plt.colorbar()
-        plt.xticks(
-            range(len(self.df_feature.columns)),
-            self.df_feature.columns,
-            rotation=60,
-            ha="left",
-        )
-        plt.xlabel("Feature")
-        plt.ylabel("NMF components")
-        plt.show()
-
-        return (df_x_scaled, df_nmf, nmf)
-
-    def plot_tsne(self) -> None:
-        """スケーリングなしのデータにt-SNEを適用し、2次元で可視化する。
-
-        Notes:
-            t-SNEは確率的手法のため、結果は ``RANDOM_STATE`` に依存する。
-        """
-        ndarray_target: np.ndarray = self.dataset.target
-
-        tsne = TSNE(n_components=2, random_state=RANDOM_STATE)
-        ndarray_tsne = tsne.fit_transform(self.df_feature)
-
-        plt.figure(figsize=(8, 6))
-        plt.xlim(ndarray_tsne[:, 0].min(), ndarray_tsne[:, 0].max())
-        plt.ylim(ndarray_tsne[:, 1].min(), ndarray_tsne[:, 1].max())
-
-        for int_idx, str_label in enumerate(ndarray_target.astype(str)):
-            plt.text(
-                ndarray_tsne[int_idx, 0],
-                ndarray_tsne[int_idx, 1],
-                str_label,
-                fontdict={"weight": "bold", "size": 9},
-            )
-
-        plt.xlabel("t-SNE feature 0")
-        plt.ylabel("t-SNE feature 1")
-        plt.show()
-
     def plot_k_means(
         self,
         n_clusters: int | None = None,
         scaling: bool = True,
-    ) -> None:
+    ) -> tuple[np.ndarray, pd.DataFrame]:
         """KMeans法でクラスタリングし、結果を可視化する。
 
         Args:
@@ -803,6 +590,9 @@ class AnalyzeIris:
                 クラス数(=3)を使用する。
             scaling (bool): ``True`` の場合はStandardScalerで標準化してから
                 KMeansを適用する。
+
+        Returns:
+            tuple[np.ndarray, pd.DataFrame]: 推定クラスタラベルと要約指標。
 
         Raises:
             TypeError: ``n_clusters`` が整数以外、または ``scaling`` がbool以外の場合。
@@ -827,72 +617,58 @@ class AnalyzeIris:
 
         print("KMeans法で予測したラベル:")
         print(ndarray_cluster)
-
-        ndarray_pca = self._get_pca_projection(ndarray_feature)
-
-        pca_for_centers = PCA(n_components=2, random_state=RANDOM_STATE)
-        pca_for_centers.fit(ndarray_feature)
-        ndarray_centers_pca = pca_for_centers.transform(kmeans.cluster_centers_)
-
-        list_colors = ["blue", "red", "green"]
-        list_markers = ["o", "^", "v"]
-
-        plt.figure(figsize=(8, 6))
-        for int_cluster in range(n_clusters):
-            ndarray_cluster_mask = ndarray_cluster == int_cluster
-            plt.scatter(
-                ndarray_pca[ndarray_cluster_mask, 0],
-                ndarray_pca[ndarray_cluster_mask, 1],
-                c=list_colors[int_cluster % len(list_colors)],
-                marker=list_markers[int_cluster % len(list_markers)],
-                s=60,
-            )
-        plt.scatter(
-            ndarray_centers_pca[:, 0],
-            ndarray_centers_pca[:, 1],
-            c="black",
-            marker="*",
-            s=400,
-        )
-        plt.xlabel("First principal component")
-        plt.ylabel("Second principal component")
-        plt.show()
-
+        print()
         print("実際のラベル:")
         print(self.dataset.target)
 
-        plt.figure(figsize=(8, 6))
-        for int_label in range(len(self.dataset.target_names)):
-            ndarray_label_mask = self.dataset.target == int_label
-            plt.scatter(
-                ndarray_pca[ndarray_label_mask, 0],
-                ndarray_pca[ndarray_label_mask, 1],
-                c=list_colors[int_label % len(list_colors)],
-                marker=list_markers[int_label % len(list_markers)],
-                s=60,
-            )
-        plt.scatter(
-            ndarray_centers_pca[:, 0],
-            ndarray_centers_pca[:, 1],
-            c="black",
-            marker="*",
-            s=400,
+        ndarray_pca = self._get_pca_projection(ndarray_feature)
+        fig, list_axes = plt.subplots(1, 2, figsize=(12, 5))
+        list_axes[0].scatter(
+            ndarray_pca[:, 0],
+            ndarray_pca[:, 1],
+            c=ndarray_cluster,
+            cmap="viridis",
+            edgecolor="k",
+            s=40,
         )
-        plt.xlabel("First principal component")
-        plt.ylabel("Second principal component")
+        list_axes[0].set_title("KMeans labels (PCA projection)")
+        list_axes[0].set_xlabel("PC1")
+        list_axes[0].set_ylabel("PC2")
+
+        list_axes[1].scatter(
+            ndarray_pca[:, 0],
+            ndarray_pca[:, 1],
+            c=self.dataset.target,
+            cmap="viridis",
+            edgecolor="k",
+            s=40,
+        )
+        list_axes[1].set_title("True labels (PCA projection)")
+        list_axes[1].set_xlabel("PC1")
+        list_axes[1].set_ylabel("PC2")
+
+        fig.tight_layout()
         plt.show()
+
+        df_summary = pd.DataFrame(
+            [self._calc_cluster_summary("KMeans", ndarray_feature, ndarray_cluster)]
+        )
+        return (ndarray_cluster, df_summary)
 
     def plot_dendrogram(
         self,
         truncate: bool = False,
         scaling: bool = True,
-    ) -> None:
+    ) -> np.ndarray:
         """凝集型階層クラスタリングのデンドログラムを表示する。
 
         Args:
             truncate (bool): ``True`` の場合は上位の枝のみを表示する。
             scaling (bool): ``True`` の場合はStandardScalerで標準化してから
                 linkageを計算する。
+
+        Returns:
+            np.ndarray: scipyのlinkage行列。
 
         Raises:
             TypeError: ``truncate`` または ``scaling`` がbool以外の場合。
@@ -903,25 +679,30 @@ class AnalyzeIris:
         ndarray_feature = self._get_feature_array(scaling)
         ndarray_linkage = linkage(ndarray_feature, method="ward")
 
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(15, 6))
         if truncate:
             dendrogram(
                 ndarray_linkage,
                 truncate_mode="lastp",
-                p=10,
+                p=12,
                 show_leaf_counts=True,
-                leaf_rotation=90,
             )
+            plt.title("Dendrogram (truncated)")
         else:
             dendrogram(ndarray_linkage)
+            plt.title("Dendrogram")
+        plt.xlabel("Sample index")
+        plt.ylabel("Cluster distance")
         plt.show()
+
+        return ndarray_linkage
 
     def plot_dbscan(
         self,
         scaling: bool = True,
-        eps: float = 0.5,
+        eps: float = 0.8,
         min_samples: int = 5,
-    ) -> None:
+    ) -> tuple[np.ndarray, pd.DataFrame]:
         """DBSCANでクラスタリングし、結果を可視化する。
 
         Args:
@@ -929,6 +710,9 @@ class AnalyzeIris:
                 DBSCANを適用する。
             eps (float): 近傍とみなす距離の上限。
             min_samples (int): コア点とみなすための近傍サンプル数。
+
+        Returns:
+            tuple[np.ndarray, pd.DataFrame]: 推定クラスタラベルと要約指標。
 
         Raises:
             TypeError: ``scaling`` がbool以外、``eps`` が数値以外、
@@ -943,29 +727,35 @@ class AnalyzeIris:
         dbscan = DBSCAN(eps=eps, min_samples=min_samples)
         ndarray_cluster = dbscan.fit_predict(ndarray_feature)
 
-        list_colors = {
-            -1: "blue",
-            0: "red",
-            1: "lime",
-            2: "orange",
-            3: "purple",
-        }
-        list_point_colors = [
-            list_colors.get(int_cluster, "gray") for int_cluster in ndarray_cluster
-        ]
+        print("DBSCANで予測したクラスタ:")
+        print(ndarray_cluster)
+        print("※ -1 はノイズとして判定されたデータです。")
 
+        ndarray_pca = self._get_pca_projection(ndarray_feature)
         plt.figure(figsize=(8, 6))
         plt.scatter(
-            ndarray_feature[:, 2],
-            ndarray_feature[:, 3],
-            c=list_point_colors,
-            s=60,
+            ndarray_pca[:, 0],
+            ndarray_pca[:, 1],
+            c=ndarray_cluster,
+            cmap="viridis",
+            edgecolor="k",
+            s=40,
         )
-        plt.xlabel("Feature 2")
-        plt.ylabel("Feature 3")
+        plt.title(
+            "DBSCAN (scaling={}, eps={}, min_samples={})".format(
+                scaling,
+                eps,
+                min_samples,
+            )
+        )
+        plt.xlabel("PC1")
+        plt.ylabel("PC2")
         plt.show()
 
-        print("Cluster Memberships:", ndarray_cluster)
+        df_summary = pd.DataFrame(
+            [self._calc_cluster_summary("DBSCAN", ndarray_feature, ndarray_cluster)]
+        )
+        return (ndarray_cluster, df_summary)
 
     def compare_unsupervised(
         self,
@@ -1056,34 +846,3 @@ class AnalyzeIris:
                 },
             ]
         )
-
-    def _plot_2d_with_labels(
-        self,
-        ndarray_xy: np.ndarray,
-        ndarray_labels: np.ndarray,
-        title: str,
-        xlabel: str,
-        ylabel: str,
-    ) -> None:
-        """2次元データをラベル別に色分けして散布図表示する内部ヘルパー。
-
-        Args:
-            ndarray_xy (np.ndarray): shape=(n_samples, 2) の座標配列。
-            ndarray_labels (np.ndarray): クラスラベル配列。
-            title (str): グラフタイトル。
-            xlabel (str): X軸ラベル。
-            ylabel (str): Y軸ラベル。
-        """
-        plt.figure(figsize=(8, 6))
-        plt.scatter(
-            ndarray_xy[:, 0],
-            ndarray_xy[:, 1] if ndarray_xy.shape[1] >= 2 else np.zeros(len(ndarray_xy)),
-            c=ndarray_labels,
-            cmap="viridis",
-            edgecolor="k",
-            s=40,
-        )
-        plt.title(title)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.show()
