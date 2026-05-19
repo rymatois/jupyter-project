@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
+from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.datasets import load_iris
 from sklearn.decomposition import NMF, PCA
@@ -224,52 +224,50 @@ class AnalyzeIris:
             return scaler.fit_transform(self.df_feature)
         return self.df_feature.to_numpy()
 
-    def _get_pca_projection(self, feature_array: np.ndarray) -> np.ndarray:
+    def _get_pca_projection(self, ndarray_feature: np.ndarray) -> np.ndarray:
         """特徴量をPCAで2次元に投影する。
 
         Args:
-            feature_array (np.ndarray): 特徴量配列。
+            ndarray_feature (np.ndarray): 特徴量配列。
 
         Returns:
             np.ndarray: PCAの第1・第2主成分得点。
         """
         pca = PCA(n_components=2, random_state=RANDOM_STATE)
-        return pca.fit_transform(feature_array)
+        return pca.fit_transform(ndarray_feature)
 
     def _calc_cluster_summary(
         self,
-        method_name: str,
-        feature_array: np.ndarray,
-        cluster_labels: np.ndarray,
+        str_method_name: str,
+        ndarray_feature: np.ndarray,
+        ndarray_cluster: np.ndarray,
     ) -> dict[str, Any]:
         """クラスタリング結果の要約指標を計算する。
 
         Args:
-            method_name (str): 手法名。
-            feature_array (np.ndarray): クラスタリングに使った特徴量配列。
-            cluster_labels (np.ndarray): 推定クラスタラベル。
+            str_method_name (str): 手法名。
+            ndarray_feature (np.ndarray): クラスタリングに使った特徴量配列。
+            ndarray_cluster (np.ndarray): 推定クラスタラベル。
 
         Returns:
             dict[str, Any]: クラスタ数、ノイズ数、ARI、シルエット係数。
         """
-        unique_labels = set(cluster_labels)
-        noise_count = int(np.sum(cluster_labels == -1))
-        cluster_count = len(unique_labels) - (1 if -1 in unique_labels else 0)
+        set_labels = set(ndarray_cluster)
+        int_noise_count = int(np.sum(ndarray_cluster == -1))
+        int_cluster_count = len(set_labels) - (1 if -1 in set_labels else 0)
 
-        silhouette_score_value: float | None = None
-        if len(unique_labels) >= 2 and len(unique_labels) < len(cluster_labels):
-            silhouette_score_value = float(
-                silhouette_score(feature_array, cluster_labels)
-            )
+        float_silhouette: float | None = None
+        if len(set_labels) >= 2 and len(set_labels) < len(ndarray_cluster):
+            float_silhouette = float(silhouette_score(ndarray_feature, ndarray_cluster))
 
         return {
-            "method": method_name,
-            "n_clusters": cluster_count,
-            "n_noise": noise_count,
+            "method": str_method_name,
+            "n_clusters": int_cluster_count,
+            "n_noise": int_noise_count,
             "adjusted_rand_score": float(
-                adjusted_rand_score(self.dataset.target, cluster_labels)
+                adjusted_rand_score(self.dataset.target, ndarray_cluster)
             ),
-            "silhouette_score": silhouette_score_value,
+            "silhouette_score": float_silhouette,
         }
 
     def get(self, head: int | None = None) -> pd.DataFrame:
@@ -281,12 +279,12 @@ class AnalyzeIris:
         Returns:
             pd.DataFrame: ラベル列（Label）を含むDataFrame。
         """
-        labeled_df: pd.DataFrame = self.df_feature.copy()
-        labeled_df["Label"] = self.dataset.target
+        df_labeled: pd.DataFrame = self.df_feature.copy()
+        df_labeled["Label"] = self.dataset.target
 
         if head is not None:
-            return labeled_df.head(head)
-        return labeled_df
+            return df_labeled.head(head)
+        return df_labeled
 
     def get_correlation(self) -> pd.DataFrame:
         """特徴量間の相関係数行列を返す。
@@ -312,15 +310,15 @@ class AnalyzeIris:
         """
         self._validate_diag_kind(diag_kind)
 
-        labeled_df: pd.DataFrame = self.get()
-        label_name_by_id: dict[int, str] = {
+        df_labeled: pd.DataFrame = self.get()
+        dict_label_name: dict[int, str] = {
             int(index): str(label_name)
             for index, label_name in enumerate(self.dataset.target_names)
         }
-        labeled_df["LabelName"] = labeled_df["Label"].map(label_name_by_id)
+        df_labeled["LabelName"] = df_labeled["Label"].map(dict_label_name)
 
         sns.pairplot(
-            labeled_df.drop(columns=["Label"]),
+            df_labeled.drop(columns=["Label"]),
             hue="LabelName",
             diag_kind=diag_kind,
         )
@@ -345,25 +343,25 @@ class AnalyzeIris:
         """
         self._validate_n_neighbors(n_neighbors)
 
-        classifiers: dict[str, Any] = DEFAULT_CLASSIFIERS.copy()
-        classifiers["KNeighborsClassifier"] = KNeighborsClassifier(
+        dict_classifier: dict[str, Any] = DEFAULT_CLASSIFIERS.copy()
+        dict_classifier["KNeighborsClassifier"] = KNeighborsClassifier(
             n_neighbors=n_neighbors,
         )
 
-        feature_df = self.df_feature
-        target_array: np.ndarray = self.dataset.target
-        results_by_classifier: dict[str, dict[str, np.ndarray]] = {}
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
+        dict_results: dict[str, dict[str, np.ndarray]] = {}
 
-        for classifier_name, classifier in classifiers.items():
-            results_by_classifier[classifier_name] = cross_validate(
+        for str_classifier_name, classifier in dict_classifier.items():
+            dict_results[str_classifier_name] = cross_validate(
                 classifier,
-                feature_df,
-                target_array,
+                df_feature,
+                ndarray_target,
                 cv=CV_SPLITS,
                 return_train_score=True,
             )
 
-        return results_by_classifier
+        return dict_results
 
     def all_supervised(self, n_neighbors: int = DEFAULT_N_NEIGHBORS) -> None:
         """全分類モデルの交差検証スコアをコンソールに出力する。
@@ -375,13 +373,13 @@ class AnalyzeIris:
             ValueError: ``n_neighbors`` がint型でないか、1未満か、
                 交差検証で扱える件数を超える場合。
         """
-        results_by_classifier = self.calc_supervised_scores(n_neighbors)
+        dict_results = self.calc_supervised_scores(n_neighbors)
 
-        for classifier_name, score_dict in results_by_classifier.items():
-            print("== {} ==".format(classifier_name))
+        for str_classifier_name, dict_score in dict_results.items():
+            print("== {} ==".format(str_classifier_name))
             for test_score, train_score in zip(
-                score_dict["test_score"],
-                score_dict["train_score"],
+                dict_score["test_score"],
+                dict_score["train_score"],
             ):
                 print(
                     "test score: {:.3f}, train score: {:.3f}".format(
@@ -408,13 +406,13 @@ class AnalyzeIris:
             ValueError: ``n_neighbors`` がint型でないか、1未満か、
                 交差検証で扱える件数を超える場合。
         """
-        results_by_classifier = self.calc_supervised_scores(n_neighbors)
-        test_scores_by_classifier: dict[str, np.ndarray] = {}
+        dict_results = self.calc_supervised_scores(n_neighbors)
+        dict_test_score: dict[str, np.ndarray] = {}
 
-        for classifier_name, score_dict in results_by_classifier.items():
-            test_scores_by_classifier[classifier_name] = score_dict["test_score"]
+        for str_classifier_name, dict_score in dict_results.items():
+            dict_test_score[str_classifier_name] = dict_score["test_score"]
 
-        return pd.DataFrame(test_scores_by_classifier)
+        return pd.DataFrame(dict_test_score)
 
     def best_supervised(
         self,
@@ -435,30 +433,30 @@ class AnalyzeIris:
             ValueError: ``n_neighbors`` がint型でないか、1未満か、
                 交差検証で扱える件数を超える場合。
         """
-        score_summary = self.get_supervised(n_neighbors).describe()
-        best_method_name: str = str(score_summary.loc["mean"].idxmax())
-        best_score: float = float(score_summary.loc["mean"].max())
-        return (best_method_name, best_score)
+        df_score = self.get_supervised(n_neighbors).describe()
+        str_best_method: str = str(df_score.loc["mean"].idxmax())
+        float_best_score: float = float(df_score.loc["mean"].max())
+        return (str_best_method, float_best_score)
 
     def plot_feature_importances_all(self) -> None:
         """木ベースの分類モデルの特徴量重要度を棒グラフで表示する。"""
-        feature_df = self.df_feature
-        target_array: np.ndarray = self.dataset.target
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
 
-        for classifier_name, classifier in DEFAULT_TREE_CLASSIFIERS.items():
-            classifier.fit(feature_df, target_array)
+        for str_classifier_name, classifier in DEFAULT_TREE_CLASSIFIERS.items():
+            classifier.fit(df_feature, ndarray_target)
 
-            feature_count: int = feature_df.shape[1]
+            int_feature_count: int = df_feature.shape[1]
             plt.figure()
             plt.barh(
-                range(feature_count),
+                range(int_feature_count),
                 classifier.feature_importances_,
                 align="center",
             )
-            plt.yticks(np.arange(feature_count), feature_df.columns)
+            plt.yticks(np.arange(int_feature_count), df_feature.columns)
             plt.xlabel("Feature importance")
             plt.ylabel("Feature")
-            plt.title(classifier_name)
+            plt.title(str_classifier_name)
             plt.show()
 
     def visualize_decision_tree(self) -> list[Any]:
@@ -469,16 +467,16 @@ class AnalyzeIris:
         Returns:
             list[Any]: plot_treeが返すArtistオブジェクトのリスト。
         """
-        feature_df = self.df_feature
-        target_array: np.ndarray = self.dataset.target
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
 
         classifier = DecisionTreeClassifier(random_state=RANDOM_STATE)
-        classifier.fit(feature_df, target_array)
+        classifier.fit(df_feature, ndarray_target)
 
         plt.figure(figsize=(16, 10))
-        tree_artists = plot_tree(
+        list_graph = plot_tree(
             classifier,
-            feature_names=feature_df.columns,
+            feature_names=df_feature.columns,
             class_names=self.dataset.target_names,
             filled=True,
             rounded=True,
@@ -486,7 +484,7 @@ class AnalyzeIris:
         )
         plt.show()
 
-        return tree_artists
+        return list_graph
 
     def plot_scaled_data(self) -> pd.DataFrame:
         """各スケーリング手法でのLinearSVCのスコアと散布図を表示する。
@@ -499,91 +497,91 @@ class AnalyzeIris:
             pd.DataFrame: 各fold・各スケーリング手法のtest/trainスコアを
                 格納したDataFrame。
         """
-        feature_df = self.df_feature
-        target_array: np.ndarray = self.dataset.target
+        df_feature = self.df_feature
+        ndarray_target: np.ndarray = self.dataset.target
 
         kfold = StratifiedKFold(n_splits=CV_SPLITS, shuffle=False)
-        score_records: list[dict[str, Any]] = []
+        list_records: list[dict[str, Any]] = []
 
-        for fold_index, (train_indices, test_indices) in enumerate(
-            kfold.split(feature_df, target_array)
+        for int_fold, (ndarray_train_idx, ndarray_test_idx) in enumerate(
+            kfold.split(df_feature, ndarray_target)
         ):
-            x_train = feature_df.iloc[train_indices].to_numpy()
-            x_test = feature_df.iloc[test_indices].to_numpy()
-            y_train = target_array[train_indices]
-            y_test = target_array[test_indices]
+            ndarray_x_train = df_feature.iloc[ndarray_train_idx].to_numpy()
+            ndarray_x_test = df_feature.iloc[ndarray_test_idx].to_numpy()
+            ndarray_y_train = ndarray_target[ndarray_train_idx]
+            ndarray_y_test = ndarray_target[ndarray_test_idx]
 
-            if fold_index > 0:
+            if int_fold > 0:
                 print(
                     "========================================================================="
                 )
 
-            feature_index_pairs = list(combinations(range(feature_df.shape[1]), 2))
-            fig, axes_grid = plt.subplots(
-                len(feature_index_pairs),
+            list_feature_pairs = list(combinations(range(df_feature.shape[1]), 2))
+            fig, ndarray_axes = plt.subplots(
+                len(list_feature_pairs),
                 len(DEFAULT_SCALERS),
                 figsize=(20, 24),
             )
 
-            for scaler_index, (scaler_name, scaler) in enumerate(
+            for int_idx, (str_scaler_name, scaler) in enumerate(
                 DEFAULT_SCALERS.items()
             ):
                 if scaler is None:
-                    x_train_scaled = x_train
-                    x_test_scaled = x_test
+                    ndarray_x_train_scaled = ndarray_x_train
+                    ndarray_x_test_scaled = ndarray_x_test
                 else:
-                    x_train_scaled = scaler.fit_transform(x_train)
-                    x_test_scaled = scaler.transform(x_test)
+                    ndarray_x_train_scaled = scaler.fit_transform(ndarray_x_train)
+                    ndarray_x_test_scaled = scaler.transform(ndarray_x_test)
 
                 classifier = LinearSVC(max_iter=10000, random_state=RANDOM_STATE)
-                classifier.fit(x_train_scaled, y_train)
-                test_score = classifier.score(
-                    x_test_scaled,
-                    y_test,
+                classifier.fit(ndarray_x_train_scaled, ndarray_y_train)
+                float_test_score = classifier.score(
+                    ndarray_x_test_scaled,
+                    ndarray_y_test,
                 )
-                train_score = classifier.score(
-                    x_train_scaled,
-                    y_train,
+                float_train_score = classifier.score(
+                    ndarray_x_train_scaled,
+                    ndarray_y_train,
                 )
 
                 print(
                     "{:<14} :  test score: {:<11.3f}train score: {:<10.3f}".format(
-                        scaler_name,
-                        test_score,
-                        train_score,
+                        str_scaler_name,
+                        float_test_score,
+                        float_train_score,
                     )
                 )
 
-                score_records.append(
+                list_records.append(
                     {
-                        "fold": fold_index,
-                        "scaler": scaler_name,
-                        "test_score": test_score,
-                        "train_score": train_score,
+                        "fold": int_fold,
+                        "scaler": str_scaler_name,
+                        "test_score": float_test_score,
+                        "train_score": float_train_score,
                     }
                 )
 
-                for pair_index, (x_index, y_index) in enumerate(
-                    feature_index_pairs
+                for int_pair_idx, (int_x_idx, int_y_idx) in enumerate(
+                    list_feature_pairs
                 ):
-                    ax = axes_grid[pair_index, scaler_index]
+                    ax = ndarray_axes[int_pair_idx, int_idx]
                     ax.scatter(
-                        x_train_scaled[:, x_index],
-                        x_train_scaled[:, y_index],
+                        ndarray_x_train_scaled[:, int_x_idx],
+                        ndarray_x_train_scaled[:, int_y_idx],
                         c="blue",
                         marker="o",
                         s=35,
                     )
                     ax.scatter(
-                        x_test_scaled[:, x_index],
-                        x_test_scaled[:, y_index],
+                        ndarray_x_test_scaled[:, int_x_idx],
+                        ndarray_x_test_scaled[:, int_y_idx],
                         c="red",
                         marker="^",
                         s=45,
                     )
-                    ax.set_title(scaler_name)
-                    ax.set_xlabel(feature_df.columns[x_index])
-                    ax.set_ylabel(feature_df.columns[y_index])
+                    ax.set_title(str_scaler_name)
+                    ax.set_xlabel(df_feature.columns[int_x_idx])
+                    ax.set_ylabel(df_feature.columns[int_y_idx])
 
             fig.tight_layout()
             plt.show()
@@ -591,7 +589,7 @@ class AnalyzeIris:
         print(
             "========================================================================="
         )
-        return pd.DataFrame(score_records)
+        return pd.DataFrame(list_records)
 
     def plot_pca(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, PCA]:
         """StandardScaler後にPCAを適用し、結果を可視化する。
@@ -613,57 +611,47 @@ class AnalyzeIris:
         )
 
         scaler = StandardScaler()
-        scaled_array = scaler.fit_transform(self.df_feature)
-        scaled_df = pd.DataFrame(
-            scaled_array,
+        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
+        df_x_scaled = pd.DataFrame(
+            ndarray_x_scaled,
             columns=self.df_feature.columns,
         )
 
         pca = PCA(n_components=n_components, random_state=RANDOM_STATE)
-        pca_points = pca.fit_transform(scaled_array)
-        pc_column_names = [
-            "PC{}".format(component_index + 1)
-            for component_index in range(n_components)
+        ndarray_pca = pca.fit_transform(ndarray_x_scaled)
+        list_pc_columns = [
+            "PC{}".format(int_idx + 1) for int_idx in range(n_components)
         ]
-        pca_df = pd.DataFrame(pca_points, columns=pc_column_names)
+        df_pca = pd.DataFrame(ndarray_pca, columns=list_pc_columns)
 
         plt.figure(figsize=(8, 6))
-        label_markers = ["o", "^", "v"]
-        for label_index, (target_name, marker) in enumerate(
-            zip(self.dataset.target_names, label_markers)
+        list_markers = ["o", "^", "v"]
+        for int_label, (str_target_name, str_marker) in enumerate(
+            zip(self.dataset.target_names, list_markers)
         ):
-            label_mask = self.dataset.target == label_index
+            ndarray_label_mask = self.dataset.target == int_label
             plt.scatter(
-                pca_points[label_mask, 0],
+                ndarray_pca[ndarray_label_mask, 0],
                 (
-                    pca_points[label_mask, 1]
+                    ndarray_pca[ndarray_label_mask, 1]
                     if n_components >= 2
-                    else np.zeros(np.sum(label_mask))
+                    else np.zeros(np.sum(ndarray_label_mask))
                 ),
-                marker=marker,
+                marker=str_marker,
                 s=60,
-                label=target_name,
+                label=str_target_name,
             )
         plt.xlabel("First component")
         plt.ylabel("Second component" if n_components >= 2 else "")
         plt.legend(loc="best")
         plt.show()
 
-        component_names = [
-            "First component",
-            "Second component",
-            "Third component",
-            "Fourth component",
-        ]
-        y_axis_labels = [
-            component_names[component_index]
-            if component_index < len(component_names)
-            else "Component {}".format(component_index + 1)
-            for component_index in range(n_components)
+        list_y_labels = [
+            "Component {}".format(int_idx + 1) for int_idx in range(n_components)
         ]
 
         plt.matshow(pca.components_, cmap="viridis")
-        plt.yticks(range(n_components), y_axis_labels)
+        plt.yticks(range(n_components), list_y_labels)
         plt.colorbar()
         plt.xticks(
             range(len(self.df_feature.columns)),
@@ -675,7 +663,7 @@ class AnalyzeIris:
         plt.ylabel("PCA components")
         plt.show()
 
-        return (scaled_df, pca_df, pca)
+        return (df_x_scaled, df_pca, pca)
 
     def plot_nmf(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, NMF]:
         """MinMaxScaler後にNMFを適用し、結果を可視化する。
@@ -700,9 +688,9 @@ class AnalyzeIris:
         )
 
         scaler = MinMaxScaler()
-        scaled_array = scaler.fit_transform(self.df_feature)
-        scaled_df = pd.DataFrame(
-            scaled_array,
+        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
+        df_x_scaled = pd.DataFrame(
+            ndarray_x_scaled,
             columns=self.df_feature.columns,
         )
 
@@ -711,50 +699,40 @@ class AnalyzeIris:
             random_state=RANDOM_STATE,
             max_iter=1000,
         )
-        nmf_points = nmf.fit_transform(scaled_array)
-        nmf_column_names = [
-            "NMF{}".format(component_index + 1)
-            for component_index in range(n_components)
+        ndarray_nmf = nmf.fit_transform(ndarray_x_scaled)
+        list_nmf_columns = [
+            "NMF{}".format(int_idx + 1) for int_idx in range(n_components)
         ]
-        nmf_df = pd.DataFrame(nmf_points, columns=nmf_column_names)
+        df_nmf = pd.DataFrame(ndarray_nmf, columns=list_nmf_columns)
 
         plt.figure(figsize=(8, 6))
-        label_markers = ["o", "^", "v"]
-        for label_index, (target_name, marker) in enumerate(
-            zip(self.dataset.target_names, label_markers)
+        list_markers = ["o", "^", "v"]
+        for int_label, (str_target_name, str_marker) in enumerate(
+            zip(self.dataset.target_names, list_markers)
         ):
-            label_mask = self.dataset.target == label_index
+            ndarray_label_mask = self.dataset.target == int_label
             plt.scatter(
-                nmf_points[label_mask, 0],
+                ndarray_nmf[ndarray_label_mask, 0],
                 (
-                    nmf_points[label_mask, 1]
+                    ndarray_nmf[ndarray_label_mask, 1]
                     if n_components >= 2
-                    else np.zeros(np.sum(label_mask))
+                    else np.zeros(np.sum(ndarray_label_mask))
                 ),
-                marker=marker,
+                marker=str_marker,
                 s=60,
-                label=target_name,
+                label=str_target_name,
             )
         plt.xlabel("First component")
         plt.ylabel("Second component" if n_components >= 2 else "")
         plt.legend(loc="best")
         plt.show()
 
-        component_names = [
-            "First component",
-            "Second component",
-            "Third component",
-            "Fourth component",
-        ]
-        y_axis_labels = [
-            component_names[component_index]
-            if component_index < len(component_names)
-            else "Component {}".format(component_index + 1)
-            for component_index in range(n_components)
+        list_y_labels = [
+            "Component {}".format(int_idx + 1) for int_idx in range(n_components)
         ]
 
         plt.matshow(nmf.components_, cmap="viridis")
-        plt.yticks(range(n_components), y_axis_labels)
+        plt.yticks(range(n_components), list_y_labels)
         plt.colorbar()
         plt.xticks(
             range(len(self.df_feature.columns)),
@@ -766,7 +744,7 @@ class AnalyzeIris:
         plt.ylabel("NMF components")
         plt.show()
 
-        return (scaled_df, nmf_df, nmf)
+        return (df_x_scaled, df_nmf, nmf)
 
     def plot_tsne(self) -> None:
         """スケーリングなしのデータにt-SNEを適用し、2次元で可視化する。
@@ -774,20 +752,20 @@ class AnalyzeIris:
         Notes:
             t-SNEは確率的手法のため、結果は ``RANDOM_STATE`` に依存する。
         """
-        target_array: np.ndarray = self.dataset.target
+        ndarray_target: np.ndarray = self.dataset.target
 
         tsne = TSNE(n_components=2, random_state=RANDOM_STATE)
-        tsne_points = tsne.fit_transform(self.df_feature)
+        ndarray_tsne = tsne.fit_transform(self.df_feature)
 
         plt.figure(figsize=(8, 6))
-        plt.xlim(tsne_points[:, 0].min(), tsne_points[:, 0].max())
-        plt.ylim(tsne_points[:, 1].min(), tsne_points[:, 1].max())
+        plt.xlim(ndarray_tsne[:, 0].min(), ndarray_tsne[:, 0].max())
+        plt.ylim(ndarray_tsne[:, 1].min(), ndarray_tsne[:, 1].max())
 
-        for point_index, label in enumerate(target_array.astype(str)):
+        for int_idx, str_label in enumerate(ndarray_target.astype(str)):
             plt.text(
-                tsne_points[point_index, 0],
-                tsne_points[point_index, 1],
-                label,
+                ndarray_tsne[int_idx, 0],
+                ndarray_tsne[int_idx, 1],
+                str_label,
                 fontdict={"weight": "bold", "size": 9},
             )
 
@@ -821,39 +799,39 @@ class AnalyzeIris:
         )
         self._validate_bool(scaling, "scaling")
 
-        feature_array = self._get_feature_array(scaling)
+        ndarray_feature = self._get_feature_array(scaling)
         kmeans = KMeans(
             n_clusters=n_clusters,
             random_state=RANDOM_STATE,
             n_init=10,
         )
-        cluster_labels = kmeans.fit_predict(feature_array)
+        ndarray_cluster_labels = kmeans.fit_predict(ndarray_feature)
 
         print("KMeans法で予測したラベル:")
-        print(cluster_labels)
+        print(ndarray_cluster_labels)
 
-        pca_points = self._get_pca_projection(feature_array)
+        ndarray_pca_points = self._get_pca_projection(ndarray_feature)
 
         pca_for_centers = PCA(n_components=2, random_state=RANDOM_STATE)
-        pca_for_centers.fit(feature_array)
-        pca_centers = pca_for_centers.transform(kmeans.cluster_centers_)
+        pca_for_centers.fit(ndarray_feature)
+        ndarray_pca_centers = pca_for_centers.transform(kmeans.cluster_centers_)
 
-        cluster_colors = ["blue", "red", "green"]
-        cluster_markers = ["o", "^", "v"]
+        list_colors = ["blue", "red", "green"]
+        list_markers = ["o", "^", "v"]
 
         plt.figure(figsize=(8, 6))
-        for cluster_id in range(n_clusters):
-            cluster_mask = cluster_labels == cluster_id
+        for int_cluster_id in range(n_clusters):
+            ndarray_cluster_mask = ndarray_cluster_labels == int_cluster_id
             plt.scatter(
-                pca_points[cluster_mask, 0],
-                pca_points[cluster_mask, 1],
-                c=cluster_colors[cluster_id % len(cluster_colors)],
-                marker=cluster_markers[cluster_id % len(cluster_markers)],
+                ndarray_pca_points[ndarray_cluster_mask, 0],
+                ndarray_pca_points[ndarray_cluster_mask, 1],
+                c=list_colors[int_cluster_id % len(list_colors)],
+                marker=list_markers[int_cluster_id % len(list_markers)],
                 s=60,
             )
         plt.scatter(
-            pca_centers[:, 0],
-            pca_centers[:, 1],
+            ndarray_pca_centers[:, 0],
+            ndarray_pca_centers[:, 1],
             c="black",
             marker="*",
             s=400,
@@ -866,18 +844,18 @@ class AnalyzeIris:
         print(self.dataset.target)
 
         plt.figure(figsize=(8, 6))
-        for label_index in range(len(self.dataset.target_names)):
-            label_mask = self.dataset.target == label_index
+        for int_label in range(len(self.dataset.target_names)):
+            ndarray_label_mask = self.dataset.target == int_label
             plt.scatter(
-                pca_points[label_mask, 0],
-                pca_points[label_mask, 1],
-                c=cluster_colors[label_index % len(cluster_colors)],
-                marker=cluster_markers[label_index % len(cluster_markers)],
+                ndarray_pca_points[ndarray_label_mask, 0],
+                ndarray_pca_points[ndarray_label_mask, 1],
+                c=list_colors[int_label % len(list_colors)],
+                marker=list_markers[int_label % len(list_markers)],
                 s=60,
             )
         plt.scatter(
-            pca_centers[:, 0],
-            pca_centers[:, 1],
+            ndarray_pca_centers[:, 0],
+            ndarray_pca_centers[:, 1],
             c="black",
             marker="*",
             s=400,
@@ -904,25 +882,25 @@ class AnalyzeIris:
         self._validate_bool(truncate, "truncate")
         self._validate_bool(scaling, "scaling")
 
-        feature_array = self._get_feature_array(scaling)
-        linkage_matrix = linkage(feature_array, method="ward")
+        ndarray_feature = self._get_feature_array(scaling)
+        ndarray_linkage = linkage(ndarray_feature, method="ward")
 
         plt.figure(figsize=(10, 6))
         if truncate:
             dendrogram(
-                linkage_matrix,
+                ndarray_linkage,
                 truncate_mode="lastp",
                 p=10,
                 show_leaf_counts=True,
                 leaf_rotation=90,
             )
         else:
-            dendrogram(linkage_matrix)
+            dendrogram(ndarray_linkage)
         plt.show()
 
     def plot_dbscan(
         self,
-        scaling: bool = True,
+        scaling: bool = False,
         eps: float = 0.5,
         min_samples: int = 5,
     ) -> None:
@@ -943,151 +921,30 @@ class AnalyzeIris:
         self._validate_positive_number(eps, "eps")
         self._validate_positive_int(min_samples, "min_samples")
 
-        feature_array = self._get_feature_array(scaling)
+        ndarray_feature = self._get_feature_array(scaling)
         dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-        cluster_labels = dbscan.fit_predict(feature_array)
+        ndarray_cluster = dbscan.fit_predict(ndarray_feature)
 
-        color_by_label = {
+        list_colors = {
             -1: "blue",
             0: "red",
             1: "lime",
             2: "orange",
             3: "purple",
         }
-        point_colors = [
-            color_by_label.get(cluster_id, "gray") for cluster_id in cluster_labels
+        list_point_colors = [
+            list_colors.get(int_cluster, "gray") for int_cluster in ndarray_cluster
         ]
 
         plt.figure(figsize=(8, 6))
         plt.scatter(
-            feature_array[:, 2],
-            feature_array[:, 3],
-            c=point_colors,
+            ndarray_feature[:, 2],
+            ndarray_feature[:, 3],
+            c=list_point_colors,
             s=60,
         )
         plt.xlabel("Feature 2")
         plt.ylabel("Feature 3")
         plt.show()
 
-        print("Cluster Memberships:", cluster_labels)
-
-    def compare_unsupervised(
-        self,
-        n_clusters: int | None = None,
-        dbscan_eps: float = 0.8,
-        dbscan_min_samples: int = 5,
-        scaling: bool = True,
-    ) -> pd.DataFrame:
-        """KMeans、階層クラスタリング、DBSCANの結果を指標で比較する。
-
-        Args:
-            n_clusters (int | None): KMeansと階層クラスタリングのクラスタ数。
-                ``None`` の場合はIrisのクラス数(=3)を使用する。
-            dbscan_eps (float): DBSCANのeps。
-            dbscan_min_samples (int): DBSCANのmin_samples。
-            scaling (bool): ``True`` の場合はStandardScalerで標準化する。
-
-        Returns:
-            pd.DataFrame: 手法ごとのクラスタ数、ノイズ数、ARI、
-                シルエット係数をまとめたDataFrame。
-        """
-        if n_clusters is None:
-            n_clusters = len(self.dataset.target_names)
-        self._validate_positive_int(
-            n_clusters,
-            "n_clusters",
-            upper_bound=len(self.df_feature),
-        )
-        self._validate_positive_number(dbscan_eps, "dbscan_eps")
-        self._validate_positive_int(dbscan_min_samples, "dbscan_min_samples")
-        self._validate_bool(scaling, "scaling")
-
-        feature_array = self._get_feature_array(scaling)
-
-        kmeans = KMeans(
-            n_clusters=n_clusters,
-            random_state=RANDOM_STATE,
-            n_init=10,
-        )
-        kmeans_labels = kmeans.fit_predict(feature_array)
-
-        linkage_matrix = linkage(feature_array, method="ward")
-        hierarchical_labels = (
-            fcluster(linkage_matrix, n_clusters, criterion="maxclust") - 1
-        )
-
-        dbscan = DBSCAN(eps=dbscan_eps, min_samples=dbscan_min_samples)
-        dbscan_labels = dbscan.fit_predict(feature_array)
-
-        summary_rows = [
-            self._calc_cluster_summary("KMeans", feature_array, kmeans_labels),
-            self._calc_cluster_summary(
-                "Dendrogram/Ward",
-                feature_array,
-                hierarchical_labels,
-            ),
-            self._calc_cluster_summary("DBSCAN", feature_array, dbscan_labels),
-        ]
-
-        return pd.DataFrame(summary_rows)
-
-    def unsupervised_consideration(self) -> pd.DataFrame:
-        """3章最終課題用に、3手法の使い分けを表で返す。
-
-        Returns:
-            pd.DataFrame: KMeans、Dendrogram、DBSCANの特徴・向いている用途・
-                注意点をまとめたDataFrame。
-        """
-        return pd.DataFrame(
-            [
-                {
-                    "method": "KMeans",
-                    "summary": "クラスタ数を先に決め、重心に近いデータ同士をまとめる。",
-                    "good_for": "球状に近いクラスタを、指定した数に分けたい場合。",
-                    "caution": "クラスタ数の指定が必要で、外れ値や非球状クラスタには弱い。",
-                },
-                {
-                    "method": "Dendrogram/Ward",
-                    "summary": "近いデータやクラスタを順に結合し、階層構造として見る。",
-                    "good_for": "クラスタ数を決める前に、データのまとまり方を観察したい場合。",
-                    "caution": "サンプル数が多いと図が読みづらく、切る高さの判断が必要。",
-                },
-                {
-                    "method": "DBSCAN",
-                    "summary": "密度が高い領域をクラスタとし、疎な点をノイズにする。",
-                    "good_for": "外れ値を検出したい場合や、クラスタ数を事前に決めたくない場合。",
-                    "caution": "epsとmin_samplesの影響が大きく、Irisでは2クラスタにまとまりやすい。",
-                },
-            ]
-        )
-
-    def _plot_2d_with_labels(
-        self,
-        points_2d: np.ndarray,
-        labels: np.ndarray,
-        title: str,
-        xlabel: str,
-        ylabel: str,
-    ) -> None:
-        """2次元データをラベル別に色分けして散布図表示する内部ヘルパー。
-
-        Args:
-            points_2d (np.ndarray): shape=(n_samples, 2) の座標配列。
-            labels (np.ndarray): クラスラベル配列。
-            title (str): グラフタイトル。
-            xlabel (str): X軸ラベル。
-            ylabel (str): Y軸ラベル。
-        """
-        plt.figure(figsize=(8, 6))
-        plt.scatter(
-            points_2d[:, 0],
-            points_2d[:, 1] if points_2d.shape[1] >= 2 else np.zeros(len(points_2d)),
-            c=labels,
-            cmap="viridis",
-            edgecolor="k",
-            s=40,
-        )
-        plt.title(title)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.show()
+        print("Cluster Memberships:", ndarray_cluster)
