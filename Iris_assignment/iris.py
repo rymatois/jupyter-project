@@ -883,32 +883,142 @@ class AnalyzeIris:
         dict_tick_setting = SCALED_PLOT_TICK_SETTINGS.get(
             (str_scaler_name, str_x_label, str_y_label)
         )
-        if dict_tick_setting is not None:
-            ax.set_xticks(dict_tick_setting["xticks"])
-            ax.set_yticks(dict_tick_setting["yticks"])
-            float_x_lower, float_x_upper = tuple(dict_tick_setting["xlim"])
-            float_y_lower, float_y_upper = tuple(dict_tick_setting["ylim"])
-            ndarray_x = np.concatenate(
-                [
-                    ndarray_x_train_scaled[:, int_x_idx],
-                    ndarray_x_test_scaled[:, int_x_idx],
-                ]
+        ax.set_xticks(dict_tick_setting["xticks"])
+        ax.set_yticks(dict_tick_setting["yticks"])
+        float_x_lower, float_x_upper = tuple(dict_tick_setting["xlim"])
+        float_y_lower, float_y_upper = tuple(dict_tick_setting["ylim"])
+        ndarray_x = np.concatenate(
+            [
+                ndarray_x_train_scaled[:, int_x_idx],
+                ndarray_x_test_scaled[:, int_x_idx],
+            ]
+        )
+        ndarray_y = np.concatenate(
+            [
+                ndarray_x_train_scaled[:, int_y_idx],
+                ndarray_x_test_scaled[:, int_y_idx],
+            ]
+        )
+        float_x_pad = (float_x_upper - float_x_lower) * 0.04
+        float_y_pad = (float_y_upper - float_y_lower) * 0.04
+        float_x_lower = min(float_x_lower, float(ndarray_x.min()) - float_x_pad)
+        float_x_upper = max(float_x_upper, float(ndarray_x.max()) + float_x_pad)
+        float_y_lower = min(float_y_lower, float(ndarray_y.min()) - float_y_pad)
+        float_y_upper = max(float_y_upper, float(ndarray_y.max()) + float_y_pad)
+        ax.set_xlim(float_x_lower, float_x_upper)
+        ax.set_ylim(float_y_lower, float_y_upper)
+        return
+
+    def _scale_features(
+        self,
+        scaler: Any,
+    ) -> tuple[pd.DataFrame, np.ndarray]:
+        """指定したスケーラーで特徴量を変換する。"""
+        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
+        df_x_scaled = pd.DataFrame(
+            ndarray_x_scaled,
+            columns=self.df_feature.columns,
+        )
+        return (df_x_scaled, ndarray_x_scaled)
+
+    def _transform_features(
+        self,
+        transformer: Any,
+        ndarray_x_scaled: np.ndarray,
+        column_prefix: str,
+        n_components: int,
+    ) -> tuple[pd.DataFrame, np.ndarray, Any]:
+        """次元圧縮モデルで特徴量を変換し、結果DataFrameを作成する。"""
+        ndarray_transformed = transformer.fit_transform(ndarray_x_scaled)
+        list_columns = [
+            "{}{}".format(column_prefix, int_idx + 1) for int_idx in range(n_components)
+        ]
+        df_transformed = pd.DataFrame(ndarray_transformed, columns=list_columns)
+        return (df_transformed, ndarray_transformed, transformer)
+
+    def _plot_transformed_scatter(
+        self,
+        ndarray_transformed: np.ndarray,
+        n_components: int,
+    ) -> None:
+        """変換後の特徴量を2次元散布図で描画する。"""
+        plt.figure(figsize=(8, 6))
+        list_markers = ["o", "^", "v"]
+        for int_label, (str_target_name, str_marker) in enumerate(
+            zip(self.dataset.target_names, list_markers)
+        ):
+            ndarray_label_mask = self.dataset.target == int_label
+            plt.scatter(
+                ndarray_transformed[ndarray_label_mask, 0],
+                (
+                    ndarray_transformed[ndarray_label_mask, 1]
+                    if n_components >= 2
+                    else np.zeros(np.sum(ndarray_label_mask))
+                ),
+                marker=str_marker,
+                s=60,
+                label=str_target_name,
             )
-            ndarray_y = np.concatenate(
-                [
-                    ndarray_x_train_scaled[:, int_y_idx],
-                    ndarray_x_test_scaled[:, int_y_idx],
-                ]
+        plt.xlabel("First component")
+        plt.ylabel("Second component" if n_components >= 2 else "")
+        plt.legend(loc="best")
+        plt.show()
+
+    def _plot_component_matrix(
+        self,
+        transformer: Any,
+        n_components: int,
+        ylabel: str,
+    ) -> None:
+        """学習済み変換器の成分行列を可視化する。"""
+        list_y_labels = [
+            "Component {}".format(int_idx + 1) for int_idx in range(n_components)
+        ]
+
+        plt.matshow(transformer.components_, cmap="viridis")
+        plt.yticks(range(n_components), list_y_labels)
+        plt.colorbar()
+        plt.xticks(
+            range(len(self.df_feature.columns)),
+            self.df_feature.columns,
+            rotation=60,
+            ha="left",
+        )
+        plt.xlabel("Feature")
+        plt.ylabel(ylabel)
+        plt.show()
+
+    def _plot_matrix_factorization_like_result(
+        self,
+        scaler: Any,
+        transformer: Any,
+        n_components: int,
+        column_prefix: str,
+        component_ylabel: str,
+    ) -> tuple[pd.DataFrame, pd.DataFrame, Any]:
+        """スケーリング後の変換・可視化・返り値生成を共通化する。"""
+        self._validate_positive_int(
+            n_components,
+            "n_components",
+            upper_bound=self.df_feature.shape[1],
+        )
+
+        df_x_scaled, ndarray_x_scaled = self._scale_features(scaler)
+        df_transformed, ndarray_transformed, fitted_transformer = (
+            self._transform_features(
+                transformer=transformer,
+                ndarray_x_scaled=ndarray_x_scaled,
+                column_prefix=column_prefix,
+                n_components=n_components,
             )
-            float_x_pad = (float_x_upper - float_x_lower) * 0.04
-            float_y_pad = (float_y_upper - float_y_lower) * 0.04
-            float_x_lower = min(float_x_lower, float(ndarray_x.min()) - float_x_pad)
-            float_x_upper = max(float_x_upper, float(ndarray_x.max()) + float_x_pad)
-            float_y_lower = min(float_y_lower, float(ndarray_y.min()) - float_y_pad)
-            float_y_upper = max(float_y_upper, float(ndarray_y.max()) + float_y_pad)
-            ax.set_xlim(float_x_lower, float_x_upper)
-            ax.set_ylim(float_y_lower, float_y_upper)
-            return
+        )
+        self._plot_transformed_scatter(ndarray_transformed, n_components)
+        self._plot_component_matrix(
+            transformer=fitted_transformer,
+            n_components=n_components,
+            ylabel=component_ylabel,
+        )
+        return (df_x_scaled, df_transformed, fitted_transformer)
 
     def plot_pca(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, PCA]:
         """StandardScaler後にPCAを適用し、結果を可視化する。
@@ -923,66 +1033,19 @@ class AnalyzeIris:
                 - df_pca (pd.DataFrame): 主成分得点のDataFrame。
                 - pca (PCA): 学習済みのPCAインスタンス。
         """
-        self._validate_positive_int(
-            n_components,
-            "n_components",
-            upper_bound=self.df_feature.shape[1],
-        )
-
-        scaler = StandardScaler()
-        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
-        df_x_scaled = pd.DataFrame(
-            ndarray_x_scaled,
-            columns=self.df_feature.columns,
-        )
-
-        pca = PCA(n_components=n_components, random_state=RANDOM_STATE)
-        ndarray_pca = pca.fit_transform(ndarray_x_scaled)
-        list_pc_columns = [
-            "PC{}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
-        df_pca = pd.DataFrame(ndarray_pca, columns=list_pc_columns)
-
-        plt.figure(figsize=(8, 6))
-        list_markers = ["o", "^", "v"]
-        for int_label, (str_target_name, str_marker) in enumerate(
-            zip(self.dataset.target_names, list_markers)
-        ):
-            ndarray_label_mask = self.dataset.target == int_label
-            plt.scatter(
-                ndarray_pca[ndarray_label_mask, 0],
-                (
-                    ndarray_pca[ndarray_label_mask, 1]
-                    if n_components >= 2
-                    else np.zeros(np.sum(ndarray_label_mask))
+        df_x_scaled, df_pca, fitted_transformer = (
+            self._plot_matrix_factorization_like_result(
+                scaler=StandardScaler(),
+                transformer=PCA(
+                    n_components=n_components,
+                    random_state=RANDOM_STATE,
                 ),
-                marker=str_marker,
-                s=60,
-                label=str_target_name,
+                n_components=n_components,
+                column_prefix="PC",
+                component_ylabel="PCA components",
             )
-        plt.xlabel("First component")
-        plt.ylabel("Second component" if n_components >= 2 else "")
-        plt.legend(loc="best")
-        plt.show()
-
-        list_y_labels = [
-            "Component {}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
-
-        plt.matshow(pca.components_, cmap="viridis")
-        plt.yticks(range(n_components), list_y_labels)
-        plt.colorbar()
-        plt.xticks(
-            range(len(self.df_feature.columns)),
-            self.df_feature.columns,
-            rotation=60,
-            ha="left",
         )
-        plt.xlabel("Feature")
-        plt.ylabel("PCA components")
-        plt.show()
-
-        return (df_x_scaled, df_pca, pca)
+        return (df_x_scaled, df_pca, fitted_transformer)
 
     def plot_nmf(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, NMF]:
         """MinMaxScaler後にNMFを適用し、結果を可視化する。
@@ -1000,70 +1063,20 @@ class AnalyzeIris:
                 - df_nmf (pd.DataFrame): NMFで変換した結果のDataFrame。
                 - nmf (NMF): 学習済みのNMFインスタンス。
         """
-        self._validate_positive_int(
-            n_components,
-            "n_components",
-            upper_bound=self.df_feature.shape[1],
-        )
-
-        scaler = MinMaxScaler()
-        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
-        df_x_scaled = pd.DataFrame(
-            ndarray_x_scaled,
-            columns=self.df_feature.columns,
-        )
-
-        nmf = NMF(
-            n_components=n_components,
-            random_state=RANDOM_STATE,
-            max_iter=1000,
-        )
-        ndarray_nmf = nmf.fit_transform(ndarray_x_scaled)
-        list_nmf_columns = [
-            "NMF{}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
-        df_nmf = pd.DataFrame(ndarray_nmf, columns=list_nmf_columns)
-
-        plt.figure(figsize=(8, 6))
-        list_markers = ["o", "^", "v"]
-        for int_label, (str_target_name, str_marker) in enumerate(
-            zip(self.dataset.target_names, list_markers)
-        ):
-            ndarray_label_mask = self.dataset.target == int_label
-            plt.scatter(
-                ndarray_nmf[ndarray_label_mask, 0],
-                (
-                    ndarray_nmf[ndarray_label_mask, 1]
-                    if n_components >= 2
-                    else np.zeros(np.sum(ndarray_label_mask))
+        df_x_scaled, df_nmf, fitted_transformer = (
+            self._plot_matrix_factorization_like_result(
+                scaler=MinMaxScaler(),
+                transformer=NMF(
+                    n_components=n_components,
+                    random_state=RANDOM_STATE,
+                    max_iter=1000,
                 ),
-                marker=str_marker,
-                s=60,
-                label=str_target_name,
+                n_components=n_components,
+                column_prefix="NMF",
+                component_ylabel="NMF components",
             )
-        plt.xlabel("First component")
-        plt.ylabel("Second component" if n_components >= 2 else "")
-        plt.legend(loc="best")
-        plt.show()
-
-        list_y_labels = [
-            "Component {}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
-
-        plt.matshow(nmf.components_, cmap="viridis")
-        plt.yticks(range(n_components), list_y_labels)
-        plt.colorbar()
-        plt.xticks(
-            range(len(self.df_feature.columns)),
-            self.df_feature.columns,
-            rotation=60,
-            ha="left",
         )
-        plt.xlabel("Feature")
-        plt.ylabel("NMF components")
-        plt.show()
-
-        return (df_x_scaled, df_nmf, nmf)
+        return (df_x_scaled, df_nmf, fitted_transformer)
 
     def plot_tsne(self) -> None:
         """スケーリングなしのデータにt-SNEを適用し、2次元で可視化する。
