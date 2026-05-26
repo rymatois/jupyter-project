@@ -86,6 +86,190 @@ DEFAULT_SCALERS: dict[str, Any | None] = {
 }
 """plot_scaled_dataで比較するスケーラー一覧。"""
 
+SCALED_PLOT_TICK_SETTINGS = {
+    ("Original", "sepal length (cm)", "sepal width (cm)"): {
+        "xlim": (4.8, 8.1),
+        "xticks": [6.0, 8.0],
+        "ylim": (1.9, 4.5),
+        "yticks": [2.0, 2.5, 3.0, 3.5, 4.0, 4.5],
+    },
+    ("MinMaxScaler", "sepal length (cm)", "sepal width (cm)"): {
+        "xlim": (-0.05, 1.05),
+        "xticks": [0.0, 0.5, 1.0],
+        "ylim": (-0.1, 1.05),
+        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    },
+    ("StandardScaler", "sepal length (cm)", "sepal width (cm)"): {
+        "xlim": (-2.2, 2.2),
+        "xticks": [-2.0, 0.0, 2.0],
+        "ylim": (-2.5, 3.3),
+        "yticks": [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0],
+    },
+    ("RobustScaler", "sepal length (cm)", "sepal width (cm)"): {
+        "xlim": (-1.2, 1.6),
+        "xticks": [-1.0, 0.0, 1.0],
+        "ylim": (-2.2, 3.0),
+        "yticks": [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0],
+    },
+    ("Normalizer", "sepal length (cm)", "sepal width (cm)"): {
+        "xlim": (0.66, 0.86),
+        "xticks": [0.7, 0.8],
+        "ylim": (0.22, 0.62),
+        "yticks": [0.3, 0.4, 0.5, 0.6],
+    },
+    ("Original", "sepal length (cm)", "petal length (cm)"): {
+        "xlim": (4.8, 8.1),
+        "xticks": [6.0, 8.0],
+        "ylim": (0.8, 7.2),
+        "yticks": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+    },
+    ("MinMaxScaler", "sepal length (cm)", "petal length (cm)"): {
+        "xlim": (-0.05, 1.05),
+        "xticks": [0.0, 0.5, 1.0],
+        "ylim": (-0.05, 1.05),
+        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    },
+    ("StandardScaler", "sepal length (cm)", "petal length (cm)"): {
+        "xlim": (-2.2, 2.2),
+        "xticks": [-2.0, 0.0, 2.0],
+        "ylim": (-1.7, 1.7),
+        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
+    },
+    ("RobustScaler", "sepal length (cm)", "petal length (cm)"): {
+        "xlim": (-1.2, 1.6),
+        "xticks": [-1.0, 0.0, 1.0],
+        "ylim": (-1.05, 0.8),
+        "yticks": [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
+    },
+    ("Normalizer", "sepal length (cm)", "petal length (cm)"): {
+        "xlim": (0.66, 0.86),
+        "xticks": [0.7, 0.8],
+        "ylim": (0.15, 0.64),
+        "yticks": [0.2, 0.3, 0.4, 0.5, 0.6],
+    },
+    ("Original", "sepal length (cm)", "petal width (cm)"): {
+        "xlim": (4.8, 8.1),
+        "xticks": [6.0, 8.0],
+        "ylim": (0.0, 2.55),
+        "yticks": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
+    },
+    ("MinMaxScaler", "sepal length (cm)", "petal width (cm)"): {
+        "xlim": (-0.05, 1.05),
+        "xticks": [0.0, 0.5, 1.0],
+        "ylim": (-0.02, 1.05),
+        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    },
+    ("StandardScaler", "sepal length (cm)", "petal width (cm)"): {
+        "xlim": (-2.2, 2.2),
+        "xticks": [-2.0, 0.0, 2.0],
+        "ylim": (-1.6, 1.8),
+        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
+    },
+    ("RobustScaler", "sepal length (cm)", "petal width (cm)"): {
+        "xlim": (-1.2, 1.6),
+        "xticks": [-1.0, 0.0, 1.0],
+        "ylim": (-0.85, 0.85),
+        "yticks": [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
+    },
+    ("Normalizer", "sepal length (cm)", "petal width (cm)"): {
+        "xlim": (0.66, 0.86),
+        "xticks": [0.7, 0.8],
+        "ylim": (0.0, 0.29),
+        "yticks": [0.05, 0.1, 0.15, 0.2, 0.25],
+    },
+    ("Original", "sepal width (cm)", "petal length (cm)"): {
+        "xlim": (1.9, 4.4),
+        "xticks": [2.0, 3.0, 4.0],
+        "ylim": (0.8, 7.1),
+        "yticks": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+    },
+    ("MinMaxScaler", "sepal width (cm)", "petal length (cm)"): {
+        "xlim": (-0.05, 1.05),
+        "xticks": [0.0, 0.5, 1.0],
+        "ylim": (-0.05, 1.05),
+        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    },
+    ("StandardScaler", "sepal width (cm)", "petal length (cm)"): {
+        "xlim": (-2.7, 2.7),
+        "xticks": [-2.5, 0.0, 2.5],
+        "ylim": (-1.7, 1.7),
+        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
+    },
+    ("RobustScaler", "sepal width (cm)", "petal length (cm)"): {
+        "xlim": (-2.2, 2.4),
+        "xticks": [-2.0, 0.0, 2.0],
+        "ylim": (-1.05, 0.8),
+        "yticks": [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
+    },
+    ("Normalizer", "sepal width (cm)", "petal length (cm)"): {
+        "xlim": (0.28, 0.62),
+        "xticks": [0.4, 0.6],
+        "ylim": (0.15, 0.64),
+        "yticks": [0.2, 0.3, 0.4, 0.5, 0.6],
+    },
+    ("Original", "sepal width (cm)", "petal width (cm)"): {
+        "xlim": (1.9, 4.4),
+        "xticks": [2.0, 3.0, 4.0],
+        "ylim": (0.0, 2.55),
+        "yticks": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
+    },
+    ("MinMaxScaler", "sepal width (cm)", "petal width (cm)"): {
+        "xlim": (-0.05, 1.05),
+        "xticks": [0.0, 0.5, 1.0],
+        "ylim": (-0.02, 1.05),
+        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    },
+    ("StandardScaler", "sepal width (cm)", "petal width (cm)"): {
+        "xlim": (-2.7, 2.7),
+        "xticks": [-2.5, 0.0, 2.5],
+        "ylim": (-1.6, 1.8),
+        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
+    },
+    ("RobustScaler", "sepal width (cm)", "petal width (cm)"): {
+        "xlim": (-2.2, 2.4),
+        "xticks": [-2.0, 0.0, 2.0],
+        "ylim": (-0.85, 0.85),
+        "yticks": [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
+    },
+    ("Normalizer", "sepal width (cm)", "petal width (cm)"): {
+        "xlim": (0.28, 0.62),
+        "xticks": [0.4, 0.6],
+        "ylim": (0.0, 0.29),
+        "yticks": [0.05, 0.1, 0.15, 0.2, 0.25],
+    },
+    ("Original", "petal length (cm)", "petal width (cm)"): {
+        "xlim": (1.0, 7.0),
+        "xticks": [2.5, 5.0],
+        "ylim": (0.0, 2.55),
+        "yticks": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
+    },
+    ("MinMaxScaler", "petal length (cm)", "petal width (cm)"): {
+        "xlim": (-0.05, 1.05),
+        "xticks": [0.0, 0.5, 1.0],
+        "ylim": (-0.02, 1.05),
+        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    },
+    ("StandardScaler", "petal length (cm)", "petal width (cm)"): {
+        "xlim": (-1.4, 1.7),
+        "xticks": [-1.0, 0.0, 1.0],
+        "ylim": (-1.6, 1.8),
+        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
+    },
+    ("RobustScaler", "petal length (cm)", "petal width (cm)"): {
+        "xlim": (-1.2, 0.8),
+        "xticks": [-1.0, 0.0],
+        "ylim": (-0.85, 0.85),
+        "yticks": [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
+    },
+    ("Normalizer", "petal length (cm)", "petal width (cm)"): {
+        "xlim": (0.16, 0.64),
+        "xticks": [0.2, 0.4, 0.6],
+        "ylim": (0.0, 0.29),
+        "yticks": [0.05, 0.1, 0.15, 0.2, 0.25],
+    },
+}
+"""模範解答に合わせたplot_scaled_data用の固定目盛り。"""
+
 
 class AnalyzeIris:
     """Irisデータセットの分析・可視化・モデル評価を行うクラス。
@@ -494,8 +678,8 @@ class AnalyzeIris:
         LinearSVCのtest/trainスコアと散布図行列を表示する。
 
         Returns:
-            pd.DataFrame: 各fold・各スケーリング手法のtest/trainスコアを
-                格納したDataFrame。
+            pd.DataFrame: 各スケーリング手法のtest/trainスコアの平均と
+                標準偏差をまとめたDataFrame。
         """
         df_feature = self.df_feature
         ndarray_target: np.ndarray = self.dataset.target
@@ -506,90 +690,225 @@ class AnalyzeIris:
         for int_fold, (ndarray_train_idx, ndarray_test_idx) in enumerate(
             kfold.split(df_feature, ndarray_target)
         ):
-            ndarray_x_train = df_feature.iloc[ndarray_train_idx].to_numpy()
-            ndarray_x_test = df_feature.iloc[ndarray_test_idx].to_numpy()
-            ndarray_y_train = ndarray_target[ndarray_train_idx]
-            ndarray_y_test = ndarray_target[ndarray_test_idx]
-
             if int_fold > 0:
                 print(
                     "========================================================================="
                 )
 
-            list_feature_pairs = list(combinations(range(df_feature.shape[1]), 2))
-            fig, ndarray_axes = plt.subplots(
-                len(list_feature_pairs),
-                len(DEFAULT_SCALERS),
-                figsize=(20, 24),
+            list_records.extend(
+                self._process_scaled_data_fold(
+                    df_feature=df_feature,
+                    ndarray_target=ndarray_target,
+                    ndarray_train_idx=ndarray_train_idx,
+                    ndarray_test_idx=ndarray_test_idx,
+                    int_fold=int_fold,
+                )
             )
-
-            for int_idx, (str_scaler_name, scaler) in enumerate(
-                DEFAULT_SCALERS.items()
-            ):
-                if scaler is None:
-                    ndarray_x_train_scaled = ndarray_x_train
-                    ndarray_x_test_scaled = ndarray_x_test
-                else:
-                    ndarray_x_train_scaled = scaler.fit_transform(ndarray_x_train)
-                    ndarray_x_test_scaled = scaler.transform(ndarray_x_test)
-
-                classifier = LinearSVC(max_iter=10000, random_state=RANDOM_STATE)
-                classifier.fit(ndarray_x_train_scaled, ndarray_y_train)
-                float_test_score = classifier.score(
-                    ndarray_x_test_scaled,
-                    ndarray_y_test,
-                )
-                float_train_score = classifier.score(
-                    ndarray_x_train_scaled,
-                    ndarray_y_train,
-                )
-
-                print(
-                    "{:<14} :  test score: {:<11.3f}train score: {:<10.3f}".format(
-                        str_scaler_name,
-                        float_test_score,
-                        float_train_score,
-                    )
-                )
-
-                list_records.append(
-                    {
-                        "fold": int_fold,
-                        "scaler": str_scaler_name,
-                        "test_score": float_test_score,
-                        "train_score": float_train_score,
-                    }
-                )
-
-                for int_pair_idx, (int_x_idx, int_y_idx) in enumerate(
-                    list_feature_pairs
-                ):
-                    ax = ndarray_axes[int_pair_idx, int_idx]
-                    ax.scatter(
-                        ndarray_x_train_scaled[:, int_x_idx],
-                        ndarray_x_train_scaled[:, int_y_idx],
-                        c="blue",
-                        marker="o",
-                        s=35,
-                    )
-                    ax.scatter(
-                        ndarray_x_test_scaled[:, int_x_idx],
-                        ndarray_x_test_scaled[:, int_y_idx],
-                        c="red",
-                        marker="^",
-                        s=45,
-                    )
-                    ax.set_title(str_scaler_name)
-                    ax.set_xlabel(df_feature.columns[int_x_idx])
-                    ax.set_ylabel(df_feature.columns[int_y_idx])
-
-            fig.tight_layout()
-            plt.show()
 
         print(
             "========================================================================="
         )
-        return pd.DataFrame(list_records)
+        df_scaled_scores = pd.DataFrame(list_records)
+        self.df_scaled_scores_detail_ = df_scaled_scores
+        return self._summarize_scaled_scores(df_scaled_scores)
+
+    def _summarize_scaled_scores(self, df_scaled_scores: pd.DataFrame) -> pd.DataFrame:
+        """各スケーリング手法のtest/trainスコア要約表を作成する。"""
+        df_summary = (
+            df_scaled_scores.groupby("scaler")[["test_score", "train_score"]]
+            .agg(["mean", "std"])
+            .round(3)
+        )
+        df_summary.columns = [
+            "test_score_mean",
+            "test_score_std",
+            "train_score_mean",
+            "train_score_std",
+        ]
+        return df_summary.sort_values("test_score_mean", ascending=False)
+
+    def _process_scaled_data_fold(
+        self,
+        df_feature: pd.DataFrame,
+        ndarray_target: np.ndarray,
+        ndarray_train_idx: np.ndarray,
+        ndarray_test_idx: np.ndarray,
+        int_fold: int,
+    ) -> list[dict[str, Any]]:
+        """plot_scaled_dataの1 fold分を評価・描画する。"""
+        ndarray_x_train = df_feature.iloc[ndarray_train_idx].to_numpy()
+        ndarray_x_test = df_feature.iloc[ndarray_test_idx].to_numpy()
+        ndarray_y_train = ndarray_target[ndarray_train_idx]
+        ndarray_y_test = ndarray_target[ndarray_test_idx]
+
+        list_feature_pairs = list(combinations(range(df_feature.shape[1]), 2))
+        fig, ndarray_axes = plt.subplots(
+            len(list_feature_pairs),
+            len(DEFAULT_SCALERS),
+            figsize=(15, 26),
+        )
+        list_scaled_results = self._build_scaled_fold_results(
+            ndarray_x_train=ndarray_x_train,
+            ndarray_x_test=ndarray_x_test,
+            ndarray_y_train=ndarray_y_train,
+            ndarray_y_test=ndarray_y_test,
+        )
+
+        self._plot_scaled_fold(
+            ndarray_axes=ndarray_axes,
+            list_feature_pairs=list_feature_pairs,
+            list_scaled_results=list_scaled_results,
+            list_feature_names=df_feature.columns.tolist(),
+        )
+
+        fig.tight_layout()
+        plt.show()
+
+        return [
+            {
+                "fold": int_fold,
+                "scaler": dict_scaled_result["scaler"],
+                "test_score": dict_scaled_result["test_score"],
+                "train_score": dict_scaled_result["train_score"],
+            }
+            for dict_scaled_result in list_scaled_results
+        ]
+
+    def _build_scaled_fold_results(
+        self,
+        ndarray_x_train: np.ndarray,
+        ndarray_x_test: np.ndarray,
+        ndarray_y_train: np.ndarray,
+        ndarray_y_test: np.ndarray,
+    ) -> list[dict[str, Any]]:
+        """各スケーラーでの評価結果と描画用データを作成する。"""
+        list_scaled_results: list[dict[str, Any]] = []
+
+        for str_scaler_name, scaler in DEFAULT_SCALERS.items():
+            if scaler is None:
+                ndarray_x_train_scaled = ndarray_x_train
+                ndarray_x_test_scaled = ndarray_x_test
+            else:
+                ndarray_x_train_scaled = scaler.fit_transform(ndarray_x_train)
+                ndarray_x_test_scaled = scaler.transform(ndarray_x_test)
+
+            classifier = LinearSVC(max_iter=10000, random_state=RANDOM_STATE)
+            classifier.fit(ndarray_x_train_scaled, ndarray_y_train)
+            float_test_score = classifier.score(
+                ndarray_x_test_scaled,
+                ndarray_y_test,
+            )
+            float_train_score = classifier.score(
+                ndarray_x_train_scaled,
+                ndarray_y_train,
+            )
+
+            print(
+                "{:<14} :  test score: {:<11.3f}train score: {:<10.3f}".format(
+                    str_scaler_name,
+                    float_test_score,
+                    float_train_score,
+                )
+            )
+
+            list_scaled_results.append(
+                {
+                    "scaler": str_scaler_name,
+                    "ndarray_x_train_scaled": ndarray_x_train_scaled,
+                    "ndarray_x_test_scaled": ndarray_x_test_scaled,
+                    "test_score": float_test_score,
+                    "train_score": float_train_score,
+                }
+            )
+
+        return list_scaled_results
+
+    def _plot_scaled_fold(
+        self,
+        ndarray_axes: np.ndarray,
+        list_feature_pairs: list[tuple[int, int]],
+        list_scaled_results: list[dict[str, Any]],
+        list_feature_names: list[str],
+    ) -> None:
+        """1 fold分のスケーリング結果を散布図行列として描画する。"""
+        for int_idx, dict_scaled_result in enumerate(list_scaled_results):
+            for int_pair_idx, (int_x_idx, int_y_idx) in enumerate(list_feature_pairs):
+                ax = ndarray_axes[int_pair_idx, int_idx]
+                ax.scatter(
+                    dict_scaled_result["ndarray_x_train_scaled"][:, int_x_idx],
+                    dict_scaled_result["ndarray_x_train_scaled"][:, int_y_idx],
+                    c="blue",
+                    marker="o",
+                    s=98,
+                    linewidths=0,
+                )
+                ax.scatter(
+                    dict_scaled_result["ndarray_x_test_scaled"][:, int_x_idx],
+                    dict_scaled_result["ndarray_x_test_scaled"][:, int_y_idx],
+                    c="red",
+                    marker="^",
+                    s=118,
+                    linewidths=0,
+                )
+                str_x_label = list_feature_names[int_x_idx]
+                str_y_label = list_feature_names[int_y_idx]
+                ax.set_title(dict_scaled_result["scaler"], fontsize=15, pad=6)
+                ax.set_xlabel(str_x_label, fontsize=12)
+                ax.set_ylabel(str_y_label, fontsize=12)
+                ax.tick_params(labelsize=12)
+                self._set_scaled_plot_ticks(
+                    ax=ax,
+                    str_scaler_name=dict_scaled_result["scaler"],
+                    str_x_label=str_x_label,
+                    str_y_label=str_y_label,
+                    ndarray_x_train_scaled=dict_scaled_result["ndarray_x_train_scaled"],
+                    ndarray_x_test_scaled=dict_scaled_result["ndarray_x_test_scaled"],
+                    int_x_idx=int_x_idx,
+                    int_y_idx=int_y_idx,
+                )
+                ax.set_box_aspect(1.65)
+
+    def _set_scaled_plot_ticks(
+        self,
+        ax: Any,
+        str_scaler_name: str,
+        str_x_label: str,
+        str_y_label: str,
+        ndarray_x_train_scaled: np.ndarray,
+        ndarray_x_test_scaled: np.ndarray,
+        int_x_idx: int,
+        int_y_idx: int,
+    ) -> None:
+        """散布図の表示範囲と目盛りを見やすい刻みに固定する。"""
+        dict_tick_setting = SCALED_PLOT_TICK_SETTINGS.get(
+            (str_scaler_name, str_x_label, str_y_label)
+        )
+        if dict_tick_setting is not None:
+            ax.set_xticks(dict_tick_setting["xticks"])
+            ax.set_yticks(dict_tick_setting["yticks"])
+            float_x_lower, float_x_upper = tuple(dict_tick_setting["xlim"])
+            float_y_lower, float_y_upper = tuple(dict_tick_setting["ylim"])
+            ndarray_x = np.concatenate(
+                [
+                    ndarray_x_train_scaled[:, int_x_idx],
+                    ndarray_x_test_scaled[:, int_x_idx],
+                ]
+            )
+            ndarray_y = np.concatenate(
+                [
+                    ndarray_x_train_scaled[:, int_y_idx],
+                    ndarray_x_test_scaled[:, int_y_idx],
+                ]
+            )
+            float_x_pad = (float_x_upper - float_x_lower) * 0.04
+            float_y_pad = (float_y_upper - float_y_lower) * 0.04
+            float_x_lower = min(float_x_lower, float(ndarray_x.min()) - float_x_pad)
+            float_x_upper = max(float_x_upper, float(ndarray_x.max()) + float_x_pad)
+            float_y_lower = min(float_y_lower, float(ndarray_y.min()) - float_y_pad)
+            float_y_upper = max(float_y_upper, float(ndarray_y.max()) + float_y_pad)
+            ax.set_xlim(float_x_lower, float_x_upper)
+            ax.set_ylim(float_y_lower, float_y_upper)
+            return
 
     def plot_pca(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, PCA]:
         """StandardScaler後にPCAを適用し、結果を可視化する。
