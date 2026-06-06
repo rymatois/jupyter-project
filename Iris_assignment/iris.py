@@ -30,9 +30,9 @@ from sklearn.datasets import load_iris
 from sklearn.decomposition import NMF, PCA
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.manifold import TSNE
 from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.model_selection import StratifiedKFold, cross_validate
-from sklearn.manifold import TSNE
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import MinMaxScaler, Normalizer, RobustScaler, StandardScaler
@@ -85,190 +85,6 @@ DEFAULT_SCALERS: dict[str, Any | None] = {
     "Normalizer": Normalizer(),
 }
 """plot_scaled_dataで比較するスケーラー一覧。"""
-
-SCALED_PLOT_TICK_SETTINGS = {
-    ("Original", "sepal length (cm)", "sepal width (cm)"): {
-        "xlim": (4.8, 8.1),
-        "xticks": [6.0, 8.0],
-        "ylim": (1.9, 4.5),
-        "yticks": [2.0, 2.5, 3.0, 3.5, 4.0, 4.5],
-    },
-    ("MinMaxScaler", "sepal length (cm)", "sepal width (cm)"): {
-        "xlim": (-0.05, 1.05),
-        "xticks": [0.0, 0.5, 1.0],
-        "ylim": (-0.1, 1.05),
-        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    },
-    ("StandardScaler", "sepal length (cm)", "sepal width (cm)"): {
-        "xlim": (-2.2, 2.2),
-        "xticks": [-2.0, 0.0, 2.0],
-        "ylim": (-2.5, 3.3),
-        "yticks": [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0],
-    },
-    ("RobustScaler", "sepal length (cm)", "sepal width (cm)"): {
-        "xlim": (-1.2, 1.6),
-        "xticks": [-1.0, 0.0, 1.0],
-        "ylim": (-2.2, 3.0),
-        "yticks": [-2.0, -1.0, 0.0, 1.0, 2.0, 3.0],
-    },
-    ("Normalizer", "sepal length (cm)", "sepal width (cm)"): {
-        "xlim": (0.66, 0.86),
-        "xticks": [0.7, 0.8],
-        "ylim": (0.22, 0.62),
-        "yticks": [0.3, 0.4, 0.5, 0.6],
-    },
-    ("Original", "sepal length (cm)", "petal length (cm)"): {
-        "xlim": (4.8, 8.1),
-        "xticks": [6.0, 8.0],
-        "ylim": (0.8, 7.2),
-        "yticks": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-    },
-    ("MinMaxScaler", "sepal length (cm)", "petal length (cm)"): {
-        "xlim": (-0.05, 1.05),
-        "xticks": [0.0, 0.5, 1.0],
-        "ylim": (-0.05, 1.05),
-        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    },
-    ("StandardScaler", "sepal length (cm)", "petal length (cm)"): {
-        "xlim": (-2.2, 2.2),
-        "xticks": [-2.0, 0.0, 2.0],
-        "ylim": (-1.7, 1.7),
-        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
-    },
-    ("RobustScaler", "sepal length (cm)", "petal length (cm)"): {
-        "xlim": (-1.2, 1.6),
-        "xticks": [-1.0, 0.0, 1.0],
-        "ylim": (-1.05, 0.8),
-        "yticks": [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
-    },
-    ("Normalizer", "sepal length (cm)", "petal length (cm)"): {
-        "xlim": (0.66, 0.86),
-        "xticks": [0.7, 0.8],
-        "ylim": (0.15, 0.64),
-        "yticks": [0.2, 0.3, 0.4, 0.5, 0.6],
-    },
-    ("Original", "sepal length (cm)", "petal width (cm)"): {
-        "xlim": (4.8, 8.1),
-        "xticks": [6.0, 8.0],
-        "ylim": (0.0, 2.55),
-        "yticks": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
-    },
-    ("MinMaxScaler", "sepal length (cm)", "petal width (cm)"): {
-        "xlim": (-0.05, 1.05),
-        "xticks": [0.0, 0.5, 1.0],
-        "ylim": (-0.02, 1.05),
-        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    },
-    ("StandardScaler", "sepal length (cm)", "petal width (cm)"): {
-        "xlim": (-2.2, 2.2),
-        "xticks": [-2.0, 0.0, 2.0],
-        "ylim": (-1.6, 1.8),
-        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
-    },
-    ("RobustScaler", "sepal length (cm)", "petal width (cm)"): {
-        "xlim": (-1.2, 1.6),
-        "xticks": [-1.0, 0.0, 1.0],
-        "ylim": (-0.85, 0.85),
-        "yticks": [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
-    },
-    ("Normalizer", "sepal length (cm)", "petal width (cm)"): {
-        "xlim": (0.66, 0.86),
-        "xticks": [0.7, 0.8],
-        "ylim": (0.0, 0.29),
-        "yticks": [0.05, 0.1, 0.15, 0.2, 0.25],
-    },
-    ("Original", "sepal width (cm)", "petal length (cm)"): {
-        "xlim": (1.9, 4.4),
-        "xticks": [2.0, 3.0, 4.0],
-        "ylim": (0.8, 7.1),
-        "yticks": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-    },
-    ("MinMaxScaler", "sepal width (cm)", "petal length (cm)"): {
-        "xlim": (-0.05, 1.05),
-        "xticks": [0.0, 0.5, 1.0],
-        "ylim": (-0.05, 1.05),
-        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    },
-    ("StandardScaler", "sepal width (cm)", "petal length (cm)"): {
-        "xlim": (-2.7, 2.7),
-        "xticks": [-2.5, 0.0, 2.5],
-        "ylim": (-1.7, 1.7),
-        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
-    },
-    ("RobustScaler", "sepal width (cm)", "petal length (cm)"): {
-        "xlim": (-2.2, 2.4),
-        "xticks": [-2.0, 0.0, 2.0],
-        "ylim": (-1.05, 0.8),
-        "yticks": [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
-    },
-    ("Normalizer", "sepal width (cm)", "petal length (cm)"): {
-        "xlim": (0.28, 0.62),
-        "xticks": [0.4, 0.6],
-        "ylim": (0.15, 0.64),
-        "yticks": [0.2, 0.3, 0.4, 0.5, 0.6],
-    },
-    ("Original", "sepal width (cm)", "petal width (cm)"): {
-        "xlim": (1.9, 4.4),
-        "xticks": [2.0, 3.0, 4.0],
-        "ylim": (0.0, 2.55),
-        "yticks": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
-    },
-    ("MinMaxScaler", "sepal width (cm)", "petal width (cm)"): {
-        "xlim": (-0.05, 1.05),
-        "xticks": [0.0, 0.5, 1.0],
-        "ylim": (-0.02, 1.05),
-        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    },
-    ("StandardScaler", "sepal width (cm)", "petal width (cm)"): {
-        "xlim": (-2.7, 2.7),
-        "xticks": [-2.5, 0.0, 2.5],
-        "ylim": (-1.6, 1.8),
-        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
-    },
-    ("RobustScaler", "sepal width (cm)", "petal width (cm)"): {
-        "xlim": (-2.2, 2.4),
-        "xticks": [-2.0, 0.0, 2.0],
-        "ylim": (-0.85, 0.85),
-        "yticks": [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
-    },
-    ("Normalizer", "sepal width (cm)", "petal width (cm)"): {
-        "xlim": (0.28, 0.62),
-        "xticks": [0.4, 0.6],
-        "ylim": (0.0, 0.29),
-        "yticks": [0.05, 0.1, 0.15, 0.2, 0.25],
-    },
-    ("Original", "petal length (cm)", "petal width (cm)"): {
-        "xlim": (1.0, 7.0),
-        "xticks": [2.5, 5.0],
-        "ylim": (0.0, 2.55),
-        "yticks": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
-    },
-    ("MinMaxScaler", "petal length (cm)", "petal width (cm)"): {
-        "xlim": (-0.05, 1.05),
-        "xticks": [0.0, 0.5, 1.0],
-        "ylim": (-0.02, 1.05),
-        "yticks": [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-    },
-    ("StandardScaler", "petal length (cm)", "petal width (cm)"): {
-        "xlim": (-1.4, 1.7),
-        "xticks": [-1.0, 0.0, 1.0],
-        "ylim": (-1.6, 1.8),
-        "yticks": [-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5],
-    },
-    ("RobustScaler", "petal length (cm)", "petal width (cm)"): {
-        "xlim": (-1.2, 0.8),
-        "xticks": [-1.0, 0.0],
-        "ylim": (-0.85, 0.85),
-        "yticks": [-0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75],
-    },
-    ("Normalizer", "petal length (cm)", "petal width (cm)"): {
-        "xlim": (0.16, 0.64),
-        "xticks": [0.2, 0.4, 0.6],
-        "ylim": (0.0, 0.29),
-        "yticks": [0.05, 0.1, 0.15, 0.2, 0.25],
-    },
-}
-"""模範解答に合わせたplot_scaled_data用の固定目盛り。"""
 
 
 class AnalyzeIris:
@@ -713,7 +529,15 @@ class AnalyzeIris:
         return self._summarize_scaled_scores(df_scaled_scores)
 
     def _summarize_scaled_scores(self, df_scaled_scores: pd.DataFrame) -> pd.DataFrame:
-        """各スケーリング手法のtest/trainスコア要約表を作成する。"""
+        """各スケーリング手法のtest/trainスコア要約表を作成する。
+
+        Args:
+            df_scaled_scores (pd.DataFrame): foldごとのスコア詳細を含むDataFrame。
+
+        Returns:
+            pd.DataFrame: スケーラーごとのtest/trainスコア平均・標準偏差を
+                まとめたDataFrame。
+        """
         df_summary = (
             df_scaled_scores.groupby("scaler")[["test_score", "train_score"]]
             .agg(["mean", "std"])
@@ -735,7 +559,18 @@ class AnalyzeIris:
         ndarray_test_idx: np.ndarray,
         int_fold: int,
     ) -> list[dict[str, Any]]:
-        """plot_scaled_dataの1 fold分を評価・描画する。"""
+        """plot_scaled_dataの1 fold分を評価・描画する。
+
+        Args:
+            df_feature (pd.DataFrame): 特徴量DataFrame。
+            ndarray_target (np.ndarray): 正解ラベル配列。
+            ndarray_train_idx (np.ndarray): 学習データの行番号配列。
+            ndarray_test_idx (np.ndarray): テストデータの行番号配列。
+            int_fold (int): 現在のfold番号。
+
+        Returns:
+            list[dict[str, Any]]: 各スケーラーの評価結果を表す辞書のリスト。
+        """
         ndarray_x_train = df_feature.iloc[ndarray_train_idx].to_numpy()
         ndarray_x_test = df_feature.iloc[ndarray_test_idx].to_numpy()
         ndarray_y_train = ndarray_target[ndarray_train_idx]
@@ -781,7 +616,18 @@ class AnalyzeIris:
         ndarray_y_train: np.ndarray,
         ndarray_y_test: np.ndarray,
     ) -> list[dict[str, Any]]:
-        """各スケーラーでの評価結果と描画用データを作成する。"""
+        """各スケーラーでの評価結果と描画用データを作成する。
+
+        Args:
+            ndarray_x_train (np.ndarray): 学習用特徴量配列。
+            ndarray_x_test (np.ndarray): テスト用特徴量配列。
+            ndarray_y_train (np.ndarray): 学習用ラベル配列。
+            ndarray_y_test (np.ndarray): テスト用ラベル配列。
+
+        Returns:
+            list[dict[str, Any]]: スケーラー名、変換後データ、評価スコアを含む
+                辞書のリスト。
+        """
         list_scaled_results: list[dict[str, Any]] = []
 
         for str_scaler_name, scaler in DEFAULT_SCALERS.items():
@@ -830,7 +676,16 @@ class AnalyzeIris:
         list_scaled_results: list[dict[str, Any]],
         list_feature_names: list[str],
     ) -> None:
-        """1 fold分のスケーリング結果を散布図行列として描画する。"""
+        """1 fold分のスケーリング結果を散布図行列として描画する。
+
+        Args:
+            ndarray_axes (np.ndarray): 描画先のAxes配列。
+            list_feature_pairs (list[tuple[int, int]]): 描画する特徴量ペアの
+                インデックス一覧。
+            list_scaled_results (list[dict[str, Any]]): 各スケーラーの
+                変換結果と評価結果。
+            list_feature_names (list[str]): 特徴量名の一覧。
+        """
         for int_idx, dict_scaled_result in enumerate(list_scaled_results):
             for int_pair_idx, (int_x_idx, int_y_idx) in enumerate(list_feature_pairs):
                 ax = ndarray_axes[int_pair_idx, int_idx]
@@ -856,64 +711,21 @@ class AnalyzeIris:
                 ax.set_xlabel(str_x_label, fontsize=12)
                 ax.set_ylabel(str_y_label, fontsize=12)
                 ax.tick_params(labelsize=12)
-                self._set_scaled_plot_ticks(
-                    ax=ax,
-                    str_scaler_name=dict_scaled_result["scaler"],
-                    str_x_label=str_x_label,
-                    str_y_label=str_y_label,
-                    ndarray_x_train_scaled=dict_scaled_result["ndarray_x_train_scaled"],
-                    ndarray_x_test_scaled=dict_scaled_result["ndarray_x_test_scaled"],
-                    int_x_idx=int_x_idx,
-                    int_y_idx=int_y_idx,
-                )
                 ax.set_box_aspect(1.65)
-
-    def _set_scaled_plot_ticks(
-        self,
-        ax: Any,
-        str_scaler_name: str,
-        str_x_label: str,
-        str_y_label: str,
-        ndarray_x_train_scaled: np.ndarray,
-        ndarray_x_test_scaled: np.ndarray,
-        int_x_idx: int,
-        int_y_idx: int,
-    ) -> None:
-        """散布図の表示範囲と目盛りを見やすい刻みに固定する。"""
-        dict_tick_setting = SCALED_PLOT_TICK_SETTINGS.get(
-            (str_scaler_name, str_x_label, str_y_label)
-        )
-        ax.set_xticks(dict_tick_setting["xticks"])
-        ax.set_yticks(dict_tick_setting["yticks"])
-        float_x_lower, float_x_upper = tuple(dict_tick_setting["xlim"])
-        float_y_lower, float_y_upper = tuple(dict_tick_setting["ylim"])
-        ndarray_x = np.concatenate(
-            [
-                ndarray_x_train_scaled[:, int_x_idx],
-                ndarray_x_test_scaled[:, int_x_idx],
-            ]
-        )
-        ndarray_y = np.concatenate(
-            [
-                ndarray_x_train_scaled[:, int_y_idx],
-                ndarray_x_test_scaled[:, int_y_idx],
-            ]
-        )
-        float_x_pad = (float_x_upper - float_x_lower) * 0.04
-        float_y_pad = (float_y_upper - float_y_lower) * 0.04
-        float_x_lower = min(float_x_lower, float(ndarray_x.min()) - float_x_pad)
-        float_x_upper = max(float_x_upper, float(ndarray_x.max()) + float_x_pad)
-        float_y_lower = min(float_y_lower, float(ndarray_y.min()) - float_y_pad)
-        float_y_upper = max(float_y_upper, float(ndarray_y.max()) + float_y_pad)
-        ax.set_xlim(float_x_lower, float_x_upper)
-        ax.set_ylim(float_y_lower, float_y_upper)
-        return
 
     def _scale_features(
         self,
         scaler: Any,
     ) -> tuple[pd.DataFrame, np.ndarray]:
-        """指定したスケーラーで特徴量を変換する。"""
+        """指定したスケーラーで特徴量を変換する。
+
+        Args:
+            scaler (Any): 特徴量変換に使うスケーラー。
+
+        Returns:
+            tuple[pd.DataFrame, np.ndarray]: 変換後の特徴量DataFrameと
+                ndarrayのタプル。
+        """
         ndarray_x_scaled = scaler.fit_transform(self.df_feature)
         df_x_scaled = pd.DataFrame(
             ndarray_x_scaled,
@@ -928,7 +740,18 @@ class AnalyzeIris:
         column_prefix: str,
         n_components: int,
     ) -> tuple[pd.DataFrame, np.ndarray, Any]:
-        """次元圧縮モデルで特徴量を変換し、結果DataFrameを作成する。"""
+        """次元圧縮モデルで特徴量を変換し、結果DataFrameを作成する。
+
+        Args:
+            transformer (Any): 次元圧縮などの変換器。
+            ndarray_x_scaled (np.ndarray): スケーリング済み特徴量配列。
+            column_prefix (str): 変換後列名の接頭辞。
+            n_components (int): 生成する成分数。
+
+        Returns:
+            tuple[pd.DataFrame, np.ndarray, Any]: 変換後DataFrame、変換後配列、
+                学習済み変換器のタプル。
+        """
         ndarray_transformed = transformer.fit_transform(ndarray_x_scaled)
         list_columns = [
             "{}{}".format(column_prefix, int_idx + 1) for int_idx in range(n_components)
@@ -941,7 +764,12 @@ class AnalyzeIris:
         ndarray_transformed: np.ndarray,
         n_components: int,
     ) -> None:
-        """変換後の特徴量を2次元散布図で描画する。"""
+        """変換後の特徴量を2次元散布図で描画する。
+
+        Args:
+            ndarray_transformed (np.ndarray): 変換後の特徴量配列。
+            n_components (int): 変換後の成分数。
+        """
         plt.figure(figsize=(8, 6))
         list_markers = ["o", "^", "v"]
         for int_label, (str_target_name, str_marker) in enumerate(
@@ -970,7 +798,13 @@ class AnalyzeIris:
         n_components: int,
         ylabel: str,
     ) -> None:
-        """学習済み変換器の成分行列を可視化する。"""
+        """学習済み変換器の成分行列を可視化する。
+
+        Args:
+            transformer (Any): 学習済み変換器。
+            n_components (int): 表示する成分数。
+            ylabel (str): y軸ラベル。
+        """
         list_y_labels = [
             "Component {}".format(int_idx + 1) for int_idx in range(n_components)
         ]
@@ -988,7 +822,7 @@ class AnalyzeIris:
         plt.ylabel(ylabel)
         plt.show()
 
-    def _plot_matrix_factorization_like_result(
+    def _transform_and_plot_components(
         self,
         scaler: Any,
         transformer: Any,
@@ -996,7 +830,19 @@ class AnalyzeIris:
         column_prefix: str,
         component_ylabel: str,
     ) -> tuple[pd.DataFrame, pd.DataFrame, Any]:
-        """スケーリング後の変換・可視化・返り値生成を共通化する。"""
+        """スケーリング後の変換・可視化・返り値生成を共通化する。
+
+        Args:
+            scaler (Any): 前処理に使うスケーラー。
+            transformer (Any): 特徴量変換に使う学習器。
+            n_components (int): 生成する成分数。
+            column_prefix (str): 変換後列名の接頭辞。
+            component_ylabel (str): 成分行列可視化時のy軸ラベル。
+
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame, Any]: スケーリング後の特徴量
+                DataFrame、変換後DataFrame、学習済み変換器のタプル。
+        """
         self._validate_positive_int(
             n_components,
             "n_components",
@@ -1034,7 +880,7 @@ class AnalyzeIris:
                 - pca (PCA): 学習済みのPCAインスタンス。
         """
         df_x_scaled, df_pca, fitted_transformer = (
-            self._plot_matrix_factorization_like_result(
+            self._transform_and_plot_components(
                 scaler=StandardScaler(),
                 transformer=PCA(
                     n_components=n_components,
@@ -1064,7 +910,7 @@ class AnalyzeIris:
                 - nmf (NMF): 学習済みのNMFインスタンス。
         """
         df_x_scaled, df_nmf, fitted_transformer = (
-            self._plot_matrix_factorization_like_result(
+            self._transform_and_plot_components(
                 scaler=MinMaxScaler(),
                 transformer=NMF(
                     n_components=n_components,
@@ -1122,6 +968,57 @@ class AnalyzeIris:
             TypeError: ``n_clusters`` が整数以外、または ``scaling`` がbool以外の場合。
             ValueError: ``n_clusters`` が1未満、またはサンプル数を超える場合。
         """
+        (
+            kmeans,
+            _,
+            ndarray_cluster_labels,
+            ndarray_pca_points,
+            ndarray_pca_centers,
+        ) = self._fit_k_means_with_projection(
+            n_clusters=n_clusters,
+            scaling=scaling,
+        )
+
+        print("KMeans法で予測したラベル:")
+        print(ndarray_cluster_labels)
+        self._plot_k_means_projection(
+            ndarray_pca_points=ndarray_pca_points,
+            ndarray_labels=ndarray_cluster_labels,
+            ndarray_pca_centers=ndarray_pca_centers,
+            n_groups=kmeans.n_clusters,
+        )
+
+        print("実際のラベル:")
+        print(self.dataset.target)
+        self._plot_k_means_projection(
+            ndarray_pca_points=ndarray_pca_points,
+            ndarray_labels=self.dataset.target,
+            ndarray_pca_centers=ndarray_pca_centers,
+            n_groups=len(self.dataset.target_names),
+        )
+
+    def _fit_k_means_with_projection(
+        self,
+        n_clusters: int | None,
+        scaling: bool,
+    ) -> tuple[KMeans, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """KMeansの学習とPCA座標への射影をまとめて行う。
+
+        Args:
+            n_clusters (int | None): クラスタ数。``None`` の場合はIrisの
+                クラス数を使う。
+            scaling (bool): ``True`` の場合はStandardScalerで標準化してから
+                KMeansを適用する。
+
+        Returns:
+            tuple[KMeans, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                学習済みKMeans、特徴量配列、予測ラベル、サンプルのPCA座標、
+                クラスタ中心のPCA座標のタプル。
+
+        Raises:
+            TypeError: ``n_clusters`` が整数以外の場合。
+            ValueError: ``n_clusters`` が1未満、またはサンプル数を超える場合。
+        """
         if n_clusters is None:
             n_clusters = len(self.dataset.target_names)
         self._validate_positive_int(
@@ -1129,7 +1026,6 @@ class AnalyzeIris:
             "n_clusters",
             upper_bound=len(self.df_feature),
         )
-        self._validate_bool(scaling, "scaling")
 
         ndarray_feature = self._get_feature_array(scaling)
         kmeans = KMeans(
@@ -1138,46 +1034,40 @@ class AnalyzeIris:
             n_init=10,
         )
         ndarray_cluster_labels = kmeans.fit_predict(ndarray_feature)
-
-        print("KMeans法で予測したラベル:")
-        print(ndarray_cluster_labels)
-
         ndarray_pca_points = self._get_pca_projection(ndarray_feature)
 
         pca_for_centers = PCA(n_components=2, random_state=RANDOM_STATE)
         pca_for_centers.fit(ndarray_feature)
         ndarray_pca_centers = pca_for_centers.transform(kmeans.cluster_centers_)
+        return (
+            kmeans,
+            ndarray_feature,
+            ndarray_cluster_labels,
+            ndarray_pca_points,
+            ndarray_pca_centers,
+        )
 
+    def _plot_k_means_projection(
+        self,
+        ndarray_pca_points: np.ndarray,
+        ndarray_labels: np.ndarray,
+        ndarray_pca_centers: np.ndarray,
+        n_groups: int,
+    ) -> None:
+        """PCA空間上にクラスタまたは正解ラベルを散布図で描画する。
+
+        Args:
+            ndarray_pca_points (np.ndarray): サンプルのPCA座標。
+            ndarray_labels (np.ndarray): 各サンプルに対応するラベル配列。
+            ndarray_pca_centers (np.ndarray): クラスタ中心のPCA座標。
+            n_groups (int): 描画対象のグループ数。
+        """
         list_colors = ["blue", "red", "green"]
         list_markers = ["o", "^", "v"]
 
         plt.figure(figsize=(8, 6))
-        for int_cluster_id in range(n_clusters):
-            ndarray_cluster_mask = ndarray_cluster_labels == int_cluster_id
-            plt.scatter(
-                ndarray_pca_points[ndarray_cluster_mask, 0],
-                ndarray_pca_points[ndarray_cluster_mask, 1],
-                c=list_colors[int_cluster_id % len(list_colors)],
-                marker=list_markers[int_cluster_id % len(list_markers)],
-                s=60,
-            )
-        plt.scatter(
-            ndarray_pca_centers[:, 0],
-            ndarray_pca_centers[:, 1],
-            c="black",
-            marker="*",
-            s=400,
-        )
-        plt.xlabel("First principal component")
-        plt.ylabel("Second principal component")
-        plt.show()
-
-        print("実際のラベル:")
-        print(self.dataset.target)
-
-        plt.figure(figsize=(8, 6))
-        for int_label in range(len(self.dataset.target_names)):
-            ndarray_label_mask = self.dataset.target == int_label
+        for int_label in range(n_groups):
+            ndarray_label_mask = ndarray_labels == int_label
             plt.scatter(
                 ndarray_pca_points[ndarray_label_mask, 0],
                 ndarray_pca_points[ndarray_label_mask, 1],
