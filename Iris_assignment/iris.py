@@ -17,6 +17,7 @@ Example:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Sequence
 from itertools import combinations
 from typing import Any, Literal
 
@@ -25,6 +26,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from scipy.cluster.hierarchy import dendrogram, linkage
+from sklearn.base import clone
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.datasets import load_iris
 from sklearn.decomposition import NMF, PCA
@@ -86,6 +88,15 @@ DEFAULT_SCALERS: dict[str, Any | None] = {
 }
 """plot_scaled_dataで比較するスケーラー一覧。"""
 
+DBSCAN_COLORS: dict[int, str] = {
+    -1: "blue",
+    0: "red",
+    1: "lime",
+    2: "orange",
+    3: "purple",
+}
+"""DBSCANのクラスタ可視化で使う色。``-1`` はノイズを表す。"""
+
 
 class AnalyzeIris:
     """Irisデータセットの分析・可視化・モデル評価を行うクラス。
@@ -103,171 +114,60 @@ class AnalyzeIris:
             columns=self.dataset.feature_names,
         )
 
-    def _validate_diag_kind(
+    def _get_features_by_scaler(
         self,
-        diag_kind: Literal["auto", "hist", "kde"] | None,
-    ) -> None:
-        """pairplotの対角要素の描画方法を確認する。
+        scaler_name: str | None = "StandardScaler",
+    ) -> np.ndarray:
+        """指定したスケーラーで特徴量をクラスタリング用の配列に変換する。
 
         Args:
-            diag_kind (Literal["auto", "hist", "kde"] | None): 対角要素の描画方法。
-
-        Raises:
-            ValueError: ``diag_kind`` が使用可能な候補以外の場合。
-        """
-        if diag_kind not in {"auto", "hist", "kde", None}:
-            raise ValueError(
-                "diag は 'auto', 'hist', 'kde', None のいずれかです。"
-                f" 受け取った値: {diag_kind!r}"
-            )
-
-    def _validate_n_neighbors(self, n_neighbors: int) -> None:
-        """KNeighborsClassifierの近傍数を確認する。
-
-        Args:
-            n_neighbors (int): KNeighborsClassifierの近傍数。
-
-        Raises:
-            ValueError: ``n_neighbors`` が使用可能な範囲外の場合。
-        """
-        if isinstance(n_neighbors, bool) or not isinstance(n_neighbors, int):
-            raise ValueError("n_neighbors はint型です。")
-        if n_neighbors < 1:
-            raise ValueError("n_neighbors は1以上のint型です。")
-
-        int_train_sample_count = len(self.df_feature) * (CV_SPLITS - 1) // CV_SPLITS
-        if n_neighbors > int_train_sample_count:
-            raise ValueError(
-                "n_neighbors が大きすぎます。"
-                f" {CV_SPLITS}分割交差検証では {int_train_sample_count} 以下にしてください。"
-            )
-
-    def _validate_positive_int(
-        self,
-        value: int,
-        variable_name: str,
-        upper_bound: int | None = None,
-    ) -> None:
-        """値が1以上の整数かどうかを確認する。
-
-        Args:
-            value (int): 検証対象の値。
-            variable_name (str): エラーメッセージに表示する変数名。
-            upper_bound (int | None): 上限値。``None`` の場合は上限チェックを
-                行わない。
-
-        Raises:
-            TypeError: ``value`` が整数以外の場合。
-            ValueError: ``value`` が1未満、または上限値を超える場合。
-        """
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise TypeError(
-                f"{variable_name} はint型です。"
-                f" 受け取った値: {value!r} (type={type(value).__name__})"
-            )
-        if value < 1:
-            raise ValueError(f"{variable_name} は1以上のint型です。")
-        if upper_bound is not None and value > upper_bound:
-            raise ValueError(
-                f"{variable_name} は {upper_bound} 以下にしてください。"
-                f" 受け取った値: {value}"
-            )
-
-    def _validate_positive_number(self, value: float, variable_name: str) -> None:
-        """値が正の数値かどうかを確認する。
-
-        Args:
-            value (float): 検証対象の値。
-            variable_name (str): エラーメッセージに表示する変数名。
-
-        Raises:
-            TypeError: ``value`` が数値以外の場合。
-            ValueError: ``value`` が0以下の場合。
-        """
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            raise TypeError(
-                f"{variable_name} は数値型(int または float)です。"
-                f" 受け取った値: {value!r} (type={type(value).__name__})"
-            )
-        if value <= 0:
-            raise ValueError(f"{variable_name} は正の数値です。受け取った値: {value}")
-
-    def _validate_bool(self, value: bool, variable_name: str) -> None:
-        """値がbool型かどうかを確認する。
-
-        Args:
-            value (bool): 検証対象の値。
-            variable_name (str): エラーメッセージに表示する変数名。
-
-        Raises:
-            TypeError: ``value`` がbool以外の場合。
-        """
-        if not isinstance(value, bool):
-            raise TypeError(
-                f"{variable_name} はbool型です。"
-                f" 受け取った値: {value!r} (type={type(value).__name__})"
-            )
-
-    def _get_feature_array(self, scaling: bool = True) -> np.ndarray:
-        """特徴量をクラスタリング用のndarrayとして返す。
-
-        Args:
-            scaling (bool): ``True`` の場合はStandardScalerで標準化する。
+            scaler_name (str | None): 使用するスケーラー名。``DEFAULT_SCALERS``
+                のキーを指定する。``"Original"`` または ``None`` の場合は
+                スケーリングしない。
 
         Returns:
             np.ndarray: 特徴量配列。
         """
-        self._validate_bool(scaling, "scaling")
+        if scaler_name is None:
+            return self.df_feature.to_numpy()
 
-        if scaling:
-            scaler = StandardScaler()
-            return scaler.fit_transform(self.df_feature)
-        return self.df_feature.to_numpy()
-
-    def _get_pca_projection(self, ndarray_feature: np.ndarray) -> np.ndarray:
-        """特徴量をPCAで2次元に投影する。
-
-        Args:
-            ndarray_feature (np.ndarray): 特徴量配列。
-
-        Returns:
-            np.ndarray: PCAの第1・第2主成分得点。
-        """
-        pca = PCA(n_components=2, random_state=RANDOM_STATE)
-        return pca.fit_transform(ndarray_feature)
+        scaler = DEFAULT_SCALERS[scaler_name]
+        if scaler is None:
+            return self.df_feature.to_numpy()
+        return clone(scaler).fit_transform(self.df_feature)
 
     def _calc_cluster_summary(
         self,
-        str_method_name: str,
-        ndarray_feature: np.ndarray,
-        ndarray_cluster: np.ndarray,
+        method_name: str,
+        feature_array: np.ndarray,
+        cluster_labels: np.ndarray,
     ) -> dict[str, Any]:
         """クラスタリング結果の要約指標を計算する。
 
         Args:
-            str_method_name (str): 手法名。
-            ndarray_feature (np.ndarray): クラスタリングに使った特徴量配列。
-            ndarray_cluster (np.ndarray): 推定クラスタラベル。
+            method_name (str): 手法名。
+            feature_array (np.ndarray): クラスタリングに使った特徴量配列。
+            cluster_labels (np.ndarray): 推定クラスタラベル。
 
         Returns:
             dict[str, Any]: クラスタ数、ノイズ数、ARI、シルエット係数。
         """
-        set_labels = set(ndarray_cluster)
-        int_noise_count = int(np.sum(ndarray_cluster == -1))
-        int_cluster_count = len(set_labels) - (1 if -1 in set_labels else 0)
+        unique_labels = set(cluster_labels)
+        noise_count = int(np.sum(cluster_labels == -1))
+        cluster_count = len(unique_labels) - (1 if -1 in unique_labels else 0)
 
-        float_silhouette: float | None = None
-        if len(set_labels) >= 2 and len(set_labels) < len(ndarray_cluster):
-            float_silhouette = float(silhouette_score(ndarray_feature, ndarray_cluster))
+        silhouette: float | None = None
+        if len(unique_labels) >= 2 and len(unique_labels) < len(cluster_labels):
+            silhouette = float(silhouette_score(feature_array, cluster_labels))
 
         return {
-            "method": str_method_name,
-            "n_clusters": int_cluster_count,
-            "n_noise": int_noise_count,
+            "method": method_name,
+            "n_clusters": cluster_count,
+            "n_noise": noise_count,
             "adjusted_rand_score": float(
-                adjusted_rand_score(self.dataset.target, ndarray_cluster)
+                adjusted_rand_score(self.dataset.target, cluster_labels)
             ),
-            "silhouette_score": float_silhouette,
+            "silhouette_score": silhouette,
         }
 
     def get(self, head: int | None = None) -> pd.DataFrame:
@@ -304,18 +204,13 @@ class AnalyzeIris:
             diag_kind (Literal["auto", "hist", "kde"] | None): 対角成分の
                 グラフ種別。``"auto"``, ``"hist"``, ``"kde"``, ``None`` を
                 指定する。デフォルトは ``"hist"``。
-
-        Raises:
-            ValueError: ``diag_kind`` が使用可能な候補以外の場合。
         """
-        self._validate_diag_kind(diag_kind)
-
         df_labeled: pd.DataFrame = self.get()
-        dict_label_name: dict[int, str] = {
+        label_names: dict[int, str] = {
             int(index): str(label_name)
             for index, label_name in enumerate(self.dataset.target_names)
         }
-        df_labeled["LabelName"] = df_labeled["Label"].map(dict_label_name)
+        df_labeled["LabelName"] = df_labeled["Label"].map(label_names)
 
         sns.pairplot(
             df_labeled.drop(columns=["Label"]),
@@ -336,50 +231,41 @@ class AnalyzeIris:
         Returns:
             dict[str, dict[str, np.ndarray]]: モデル名をキー、cross_validateの
                 結果を値とするdict。
-
-        Raises:
-            ValueError: ``n_neighbors`` がint型でないか、1未満か、
-                交差検証で扱える件数を超える場合。
         """
-        self._validate_n_neighbors(n_neighbors)
-
-        dict_classifier: dict[str, Any] = DEFAULT_CLASSIFIERS.copy()
-        dict_classifier["KNeighborsClassifier"] = KNeighborsClassifier(
+        classifiers: dict[str, Any] = DEFAULT_CLASSIFIERS.copy()
+        classifiers["KNeighborsClassifier"] = KNeighborsClassifier(
             n_neighbors=n_neighbors,
         )
 
         df_feature = self.df_feature
-        ndarray_target: np.ndarray = self.dataset.target
-        dict_results: dict[str, dict[str, np.ndarray]] = {}
+        target: np.ndarray = self.dataset.target
+        results: dict[str, dict[str, np.ndarray]] = {}
 
-        for str_classifier_name, classifier in dict_classifier.items():
-            dict_results[str_classifier_name] = cross_validate(
+        for classifier_name, classifier in classifiers.items():
+            results[classifier_name] = cross_validate(
                 classifier,
                 df_feature,
-                ndarray_target,
+                target,
                 cv=CV_SPLITS,
                 return_train_score=True,
+                error_score="raise",
             )
 
-        return dict_results
+        return results
 
     def all_supervised(self, n_neighbors: int = DEFAULT_N_NEIGHBORS) -> None:
         """全分類モデルの交差検証スコアをコンソールに出力する。
 
         Args:
             n_neighbors (int): KNeighborsClassifierの近傍数。デフォルトは4。
-
-        Raises:
-            ValueError: ``n_neighbors`` がint型でないか、1未満か、
-                交差検証で扱える件数を超える場合。
         """
-        dict_results = self.calc_supervised_scores(n_neighbors)
+        results = self.calc_supervised_scores(n_neighbors)
 
-        for str_classifier_name, dict_score in dict_results.items():
-            print("== {} ==".format(str_classifier_name))
+        for classifier_name, score in results.items():
+            print("== {} ==".format(classifier_name))
             for test_score, train_score in zip(
-                dict_score["test_score"],
-                dict_score["train_score"],
+                score["test_score"],
+                score["train_score"],
             ):
                 print(
                     "test score: {:.3f}, train score: {:.3f}".format(
@@ -401,18 +287,14 @@ class AnalyzeIris:
         Returns:
             pd.DataFrame: モデル名を列名、各foldのテストスコアを行とする
                 DataFrame。
-
-        Raises:
-            ValueError: ``n_neighbors`` がint型でないか、1未満か、
-                交差検証で扱える件数を超える場合。
         """
-        dict_results = self.calc_supervised_scores(n_neighbors)
-        dict_test_score: dict[str, np.ndarray] = {}
+        results = self.calc_supervised_scores(n_neighbors)
+        test_scores: dict[str, np.ndarray] = {}
 
-        for str_classifier_name, dict_score in dict_results.items():
-            dict_test_score[str_classifier_name] = dict_score["test_score"]
+        for classifier_name, score in results.items():
+            test_scores[classifier_name] = score["test_score"]
 
-        return pd.DataFrame(dict_test_score)
+        return pd.DataFrame(test_scores)
 
     def best_supervised(
         self,
@@ -426,37 +308,33 @@ class AnalyzeIris:
         Returns:
             tuple[str, float]: 以下の要素を持つタプル。
 
-                - str_best_method (str): 最良モデルの名前。
-                - float_best_score (float): 最良モデルの平均テストスコア。
-
-        Raises:
-            ValueError: ``n_neighbors`` がint型でないか、1未満か、
-                交差検証で扱える件数を超える場合。
+                - best_method (str): 最良モデルの名前。
+                - best_score (float): 最良モデルの平均テストスコア。
         """
         df_score = self.get_supervised(n_neighbors).describe()
-        str_best_method: str = str(df_score.loc["mean"].idxmax())
-        float_best_score: float = float(df_score.loc["mean"].max())
-        return (str_best_method, float_best_score)
+        best_method: str = str(df_score.loc["mean"].idxmax())
+        best_score: float = float(df_score.loc["mean"].max())
+        return (best_method, best_score)
 
     def plot_feature_importances_all(self) -> None:
         """木ベースの分類モデルの特徴量重要度を棒グラフで表示する。"""
         df_feature = self.df_feature
-        ndarray_target: np.ndarray = self.dataset.target
+        target: np.ndarray = self.dataset.target
 
-        for str_classifier_name, classifier in DEFAULT_TREE_CLASSIFIERS.items():
-            classifier.fit(df_feature, ndarray_target)
+        for classifier_name, classifier in DEFAULT_TREE_CLASSIFIERS.items():
+            classifier.fit(df_feature, target)
 
-            int_feature_count: int = df_feature.shape[1]
+            feature_count: int = df_feature.shape[1]
             plt.figure()
             plt.barh(
-                range(int_feature_count),
+                range(feature_count),
                 classifier.feature_importances_,
                 align="center",
             )
-            plt.yticks(np.arange(int_feature_count), df_feature.columns)
+            plt.yticks(np.arange(feature_count), df_feature.columns)
             plt.xlabel("Feature importance")
             plt.ylabel("Feature")
-            plt.title(str_classifier_name)
+            plt.title(classifier_name)
             plt.show()
 
     def visualize_decision_tree(self) -> list[Any]:
@@ -468,13 +346,13 @@ class AnalyzeIris:
             list[Any]: plot_treeが返すArtistオブジェクトのリスト。
         """
         df_feature = self.df_feature
-        ndarray_target: np.ndarray = self.dataset.target
+        target: np.ndarray = self.dataset.target
 
         classifier = DecisionTreeClassifier(random_state=RANDOM_STATE)
-        classifier.fit(df_feature, ndarray_target)
+        classifier.fit(df_feature, target)
 
         plt.figure(figsize=(16, 10))
-        list_graph = plot_tree(
+        tree_artists = plot_tree(
             classifier,
             feature_names=df_feature.columns,
             class_names=self.dataset.target_names,
@@ -484,7 +362,7 @@ class AnalyzeIris:
         )
         plt.show()
 
-        return list_graph
+        return tree_artists
 
     def plot_scaled_data(self) -> pd.DataFrame:
         """各スケーリング手法でのLinearSVCのスコアと散布図を表示する。
@@ -498,51 +376,39 @@ class AnalyzeIris:
                 標準偏差をまとめたDataFrame。
         """
         df_feature = self.df_feature
-        ndarray_target: np.ndarray = self.dataset.target
+        target: np.ndarray = self.dataset.target
 
         kfold = StratifiedKFold(n_splits=CV_SPLITS, shuffle=False)
-        list_records: list[dict[str, Any]] = []
 
-        for int_fold, (ndarray_train_idx, ndarray_test_idx) in enumerate(
-            kfold.split(df_feature, ndarray_target)
-        ):
-            if int_fold > 0:
+        records: list[dict[str, Any]] = []
+        # recordsの各要素:
+        # {"fold": fold番号, "scaler": スケーラー名,
+        #  "test_score": テストスコア, "train_score": 学習スコア}
+
+        for fold, (train_idx, test_idx) in enumerate(kfold.split(df_feature, target)):
+            if fold > 0:
                 print(
                     "========================================================================="
                 )
 
-            list_records.extend(
+            records.extend(
                 self._process_scaled_data_fold(
-                    df_feature=df_feature,
-                    ndarray_target=ndarray_target,
-                    ndarray_train_idx=ndarray_train_idx,
-                    ndarray_test_idx=ndarray_test_idx,
-                    int_fold=int_fold,
+                    train_idx=train_idx,
+                    test_idx=test_idx,
+                    fold=fold,
                 )
             )
 
         print(
             "========================================================================="
         )
-        df_scaled_scores = pd.DataFrame(list_records)
-        self.df_scaled_scores_detail_ = df_scaled_scores
-        return self._summarize_scaled_scores(df_scaled_scores)
-
-    def _summarize_scaled_scores(self, df_scaled_scores: pd.DataFrame) -> pd.DataFrame:
-        """各スケーリング手法のtest/trainスコア要約表を作成する。
-
-        Args:
-            df_scaled_scores (pd.DataFrame): foldごとのスコア詳細を含むDataFrame。
-
-        Returns:
-            pd.DataFrame: スケーラーごとのtest/trainスコア平均・標準偏差を
-                まとめたDataFrame。
-        """
+        df_scaled_scores = pd.DataFrame(records)
         df_summary = (
             df_scaled_scores.groupby("scaler")[["test_score", "train_score"]]
             .agg(["mean", "std"])
             .round(3)
         )
+
         df_summary.columns = [
             "test_score_mean",
             "test_score_std",
@@ -553,47 +419,45 @@ class AnalyzeIris:
 
     def _process_scaled_data_fold(
         self,
-        df_feature: pd.DataFrame,
-        ndarray_target: np.ndarray,
-        ndarray_train_idx: np.ndarray,
-        ndarray_test_idx: np.ndarray,
-        int_fold: int,
+        train_idx: np.ndarray,
+        test_idx: np.ndarray,
+        fold: int,
     ) -> list[dict[str, Any]]:
         """plot_scaled_dataの1 fold分を評価・描画する。
 
         Args:
-            df_feature (pd.DataFrame): 特徴量DataFrame。
-            ndarray_target (np.ndarray): 正解ラベル配列。
-            ndarray_train_idx (np.ndarray): 学習データの行番号配列。
-            ndarray_test_idx (np.ndarray): テストデータの行番号配列。
-            int_fold (int): 現在のfold番号。
+            train_idx (np.ndarray): 学習データの行番号配列。
+            test_idx (np.ndarray): テストデータの行番号配列。
+            fold (int): 現在のfold番号。
 
         Returns:
             list[dict[str, Any]]: 各スケーラーの評価結果を表す辞書のリスト。
         """
-        ndarray_x_train = df_feature.iloc[ndarray_train_idx].to_numpy()
-        ndarray_x_test = df_feature.iloc[ndarray_test_idx].to_numpy()
-        ndarray_y_train = ndarray_target[ndarray_train_idx]
-        ndarray_y_test = ndarray_target[ndarray_test_idx]
+        df_feature = self.df_feature
+        target = self.dataset.target
+        x_train = df_feature.iloc[train_idx].to_numpy()
+        x_test = df_feature.iloc[test_idx].to_numpy()
+        y_train = target[train_idx]
+        y_test = target[test_idx]
 
-        list_feature_pairs = list(combinations(range(df_feature.shape[1]), 2))
-        fig, ndarray_axes = plt.subplots(
-            len(list_feature_pairs),
+        feature_pairs = list(combinations(range(df_feature.shape[1]), 2))
+        fig, axes = plt.subplots(
+            len(feature_pairs),
             len(DEFAULT_SCALERS),
             figsize=(15, 26),
         )
-        list_scaled_results = self._build_scaled_fold_results(
-            ndarray_x_train=ndarray_x_train,
-            ndarray_x_test=ndarray_x_test,
-            ndarray_y_train=ndarray_y_train,
-            ndarray_y_test=ndarray_y_test,
+        scaled_results = self._build_scaled_fold_results(
+            x_train=x_train,
+            x_test=x_test,
+            y_train=y_train,
+            y_test=y_test,
         )
 
         self._plot_scaled_fold(
-            ndarray_axes=ndarray_axes,
-            list_feature_pairs=list_feature_pairs,
-            list_scaled_results=list_scaled_results,
-            list_feature_names=df_feature.columns.tolist(),
+            axes=axes,
+            feature_pairs=feature_pairs,
+            scaled_results=scaled_results,
+            feature_names=df_feature.columns.tolist(),
         )
 
         fig.tight_layout()
@@ -601,191 +465,143 @@ class AnalyzeIris:
 
         return [
             {
-                "fold": int_fold,
-                "scaler": dict_scaled_result["scaler"],
-                "test_score": dict_scaled_result["test_score"],
-                "train_score": dict_scaled_result["train_score"],
+                "fold": fold,
+                "scaler": scaled_result["scaler"],
+                "test_score": scaled_result["test_score"],
+                "train_score": scaled_result["train_score"],
             }
-            for dict_scaled_result in list_scaled_results
+            for scaled_result in scaled_results
         ]
 
     def _build_scaled_fold_results(
         self,
-        ndarray_x_train: np.ndarray,
-        ndarray_x_test: np.ndarray,
-        ndarray_y_train: np.ndarray,
-        ndarray_y_test: np.ndarray,
+        x_train: np.ndarray,
+        x_test: np.ndarray,
+        y_train: np.ndarray,
+        y_test: np.ndarray,
     ) -> list[dict[str, Any]]:
         """各スケーラーでの評価結果と描画用データを作成する。
 
         Args:
-            ndarray_x_train (np.ndarray): 学習用特徴量配列。
-            ndarray_x_test (np.ndarray): テスト用特徴量配列。
-            ndarray_y_train (np.ndarray): 学習用ラベル配列。
-            ndarray_y_test (np.ndarray): テスト用ラベル配列。
+            x_train (np.ndarray): 学習用特徴量配列。
+            x_test (np.ndarray): テスト用特徴量配列。
+            y_train (np.ndarray): 学習用ラベル配列。
+            y_test (np.ndarray): テスト用ラベル配列。
 
         Returns:
             list[dict[str, Any]]: スケーラー名、変換後データ、評価スコアを含む
                 辞書のリスト。
         """
-        list_scaled_results: list[dict[str, Any]] = []
+        scaled_results: list[dict[str, Any]] = []
 
-        for str_scaler_name, scaler in DEFAULT_SCALERS.items():
+        for scaler_name, scaler in DEFAULT_SCALERS.items():
             if scaler is None:
-                ndarray_x_train_scaled = ndarray_x_train
-                ndarray_x_test_scaled = ndarray_x_test
+                x_train_scaled = x_train
+                x_test_scaled = x_test
             else:
-                ndarray_x_train_scaled = scaler.fit_transform(ndarray_x_train)
-                ndarray_x_test_scaled = scaler.transform(ndarray_x_test)
+                x_train_scaled = scaler.fit_transform(x_train)
+                x_test_scaled = scaler.transform(x_test)
 
             classifier = LinearSVC(max_iter=10000, random_state=RANDOM_STATE)
-            classifier.fit(ndarray_x_train_scaled, ndarray_y_train)
-            float_test_score = classifier.score(
-                ndarray_x_test_scaled,
-                ndarray_y_test,
+            classifier.fit(x_train_scaled, y_train)
+            test_score = classifier.score(
+                x_test_scaled,
+                y_test,
             )
-            float_train_score = classifier.score(
-                ndarray_x_train_scaled,
-                ndarray_y_train,
+            train_score = classifier.score(
+                x_train_scaled,
+                y_train,
             )
 
             print(
                 "{:<14} :  test score: {:<11.3f}train score: {:<10.3f}".format(
-                    str_scaler_name,
-                    float_test_score,
-                    float_train_score,
+                    scaler_name,
+                    test_score,
+                    train_score,
                 )
             )
 
-            list_scaled_results.append(
+            scaled_results.append(
                 {
-                    "scaler": str_scaler_name,
-                    "ndarray_x_train_scaled": ndarray_x_train_scaled,
-                    "ndarray_x_test_scaled": ndarray_x_test_scaled,
-                    "test_score": float_test_score,
-                    "train_score": float_train_score,
+                    "scaler": scaler_name,
+                    "x_train_scaled": x_train_scaled,
+                    "x_test_scaled": x_test_scaled,
+                    "test_score": test_score,
+                    "train_score": train_score,
                 }
             )
 
-        return list_scaled_results
+        return scaled_results
 
     def _plot_scaled_fold(
         self,
-        ndarray_axes: np.ndarray,
-        list_feature_pairs: list[tuple[int, int]],
-        list_scaled_results: list[dict[str, Any]],
-        list_feature_names: list[str],
+        axes: np.ndarray,
+        feature_pairs: list[tuple[int, int]],
+        scaled_results: list[dict[str, Any]],
+        feature_names: list[str],
     ) -> None:
         """1 fold分のスケーリング結果を散布図行列として描画する。
 
         Args:
-            ndarray_axes (np.ndarray): 描画先のAxes配列。
-            list_feature_pairs (list[tuple[int, int]]): 描画する特徴量ペアの
+            axes (np.ndarray): 描画先のAxes配列。
+            feature_pairs (list[tuple[int, int]]): 描画する特徴量ペアの
                 インデックス一覧。
-            list_scaled_results (list[dict[str, Any]]): 各スケーラーの
+            scaled_results (list[dict[str, Any]]): 各スケーラーの
                 変換結果と評価結果。
-            list_feature_names (list[str]): 特徴量名の一覧。
+            feature_names (list[str]): 特徴量名の一覧。
         """
-        for int_idx, dict_scaled_result in enumerate(list_scaled_results):
-            for int_pair_idx, (int_x_idx, int_y_idx) in enumerate(list_feature_pairs):
-                ax = ndarray_axes[int_pair_idx, int_idx]
+        for idx, scaled_result in enumerate(scaled_results):
+            for pair_idx, (x_idx, y_idx) in enumerate(feature_pairs):
+                ax = axes[pair_idx, idx]
                 ax.scatter(
-                    dict_scaled_result["ndarray_x_train_scaled"][:, int_x_idx],
-                    dict_scaled_result["ndarray_x_train_scaled"][:, int_y_idx],
+                    scaled_result["x_train_scaled"][:, x_idx],
+                    scaled_result["x_train_scaled"][:, y_idx],
                     c="blue",
                     marker="o",
                     s=98,
-                    linewidths=0,
                 )
                 ax.scatter(
-                    dict_scaled_result["ndarray_x_test_scaled"][:, int_x_idx],
-                    dict_scaled_result["ndarray_x_test_scaled"][:, int_y_idx],
+                    scaled_result["x_test_scaled"][:, x_idx],
+                    scaled_result["x_test_scaled"][:, y_idx],
                     c="red",
                     marker="^",
                     s=118,
-                    linewidths=0,
                 )
-                str_x_label = list_feature_names[int_x_idx]
-                str_y_label = list_feature_names[int_y_idx]
-                ax.set_title(dict_scaled_result["scaler"], fontsize=15, pad=6)
-                ax.set_xlabel(str_x_label, fontsize=12)
-                ax.set_ylabel(str_y_label, fontsize=12)
+                x_label = feature_names[x_idx]
+                y_label = feature_names[y_idx]
+                ax.set_title(scaled_result["scaler"], fontsize=15, pad=6)
+                ax.set_xlabel(x_label, fontsize=12)
+                ax.set_ylabel(y_label, fontsize=12)
                 ax.tick_params(labelsize=12)
                 ax.set_box_aspect(1.65)
 
-    def _scale_features(
-        self,
-        scaler: Any,
-    ) -> tuple[pd.DataFrame, np.ndarray]:
-        """指定したスケーラーで特徴量を変換する。
-
-        Args:
-            scaler (Any): 特徴量変換に使うスケーラー。
-
-        Returns:
-            tuple[pd.DataFrame, np.ndarray]: 変換後の特徴量DataFrameと
-                ndarrayのタプル。
-        """
-        ndarray_x_scaled = scaler.fit_transform(self.df_feature)
-        df_x_scaled = pd.DataFrame(
-            ndarray_x_scaled,
-            columns=self.df_feature.columns,
-        )
-        return (df_x_scaled, ndarray_x_scaled)
-
-    def _transform_features(
-        self,
-        transformer: Any,
-        ndarray_x_scaled: np.ndarray,
-        column_prefix: str,
-        n_components: int,
-    ) -> tuple[pd.DataFrame, np.ndarray, Any]:
-        """次元圧縮モデルで特徴量を変換し、結果DataFrameを作成する。
-
-        Args:
-            transformer (Any): 次元圧縮などの変換器。
-            ndarray_x_scaled (np.ndarray): スケーリング済み特徴量配列。
-            column_prefix (str): 変換後列名の接頭辞。
-            n_components (int): 生成する成分数。
-
-        Returns:
-            tuple[pd.DataFrame, np.ndarray, Any]: 変換後DataFrame、変換後配列、
-                学習済み変換器のタプル。
-        """
-        ndarray_transformed = transformer.fit_transform(ndarray_x_scaled)
-        list_columns = [
-            "{}{}".format(column_prefix, int_idx + 1) for int_idx in range(n_components)
-        ]
-        df_transformed = pd.DataFrame(ndarray_transformed, columns=list_columns)
-        return (df_transformed, ndarray_transformed, transformer)
-
     def _plot_transformed_scatter(
         self,
-        ndarray_transformed: np.ndarray,
+        transformed: np.ndarray,
         n_components: int,
     ) -> None:
         """変換後の特徴量を2次元散布図で描画する。
 
         Args:
-            ndarray_transformed (np.ndarray): 変換後の特徴量配列。
+            transformed (np.ndarray): 変換後の特徴量配列。
             n_components (int): 変換後の成分数。
         """
         plt.figure(figsize=(8, 6))
-        list_markers = ["o", "^", "v"]
-        for int_label, (str_target_name, str_marker) in enumerate(
-            zip(self.dataset.target_names, list_markers)
+        markers = ["o", "^", "v"]
+        for label_id, (target_name, marker) in enumerate(
+            zip(self.dataset.target_names, markers)
         ):
-            ndarray_label_mask = self.dataset.target == int_label
+            label_mask = self.dataset.target == label_id
             plt.scatter(
-                ndarray_transformed[ndarray_label_mask, 0],
+                transformed[label_mask, 0],
                 (
-                    ndarray_transformed[ndarray_label_mask, 1]
+                    transformed[label_mask, 1]
                     if n_components >= 2
-                    else np.zeros(np.sum(ndarray_label_mask))
+                    else np.zeros(np.sum(label_mask))
                 ),
-                marker=str_marker,
+                marker=marker,
                 s=60,
-                label=str_target_name,
+                label=target_name,
             )
         plt.xlabel("First component")
         plt.ylabel("Second component" if n_components >= 2 else "")
@@ -805,12 +621,10 @@ class AnalyzeIris:
             n_components (int): 表示する成分数。
             ylabel (str): y軸ラベル。
         """
-        list_y_labels = [
-            "Component {}".format(int_idx + 1) for int_idx in range(n_components)
-        ]
+        y_labels = ["Component {}".format(idx + 1) for idx in range(n_components)]
 
         plt.matshow(transformer.components_, cmap="viridis")
-        plt.yticks(range(n_components), list_y_labels)
+        plt.yticks(range(n_components), y_labels)
         plt.colorbar()
         plt.xticks(
             range(len(self.df_feature.columns)),
@@ -824,7 +638,7 @@ class AnalyzeIris:
 
     def _transform_and_plot_components(
         self,
-        scaler: Any,
+        scaler_name: str,
         transformer: Any,
         n_components: int,
         column_prefix: str,
@@ -833,7 +647,7 @@ class AnalyzeIris:
         """スケーリング後の変換・可視化・返り値生成を共通化する。
 
         Args:
-            scaler (Any): 前処理に使うスケーラー。
+            scaler_name (str): 前処理に使うスケーラー名。
             transformer (Any): 特徴量変換に使う学習器。
             n_components (int): 生成する成分数。
             column_prefix (str): 変換後列名の接頭辞。
@@ -843,28 +657,21 @@ class AnalyzeIris:
             tuple[pd.DataFrame, pd.DataFrame, Any]: スケーリング後の特徴量
                 DataFrame、変換後DataFrame、学習済み変換器のタプル。
         """
-        self._validate_positive_int(
-            n_components,
-            "n_components",
-            upper_bound=self.df_feature.shape[1],
+        x_scaled = self._get_features_by_scaler(scaler_name)
+        df_x_scaled = pd.DataFrame(
+            x_scaled,
+            columns=self.df_feature.columns,
         )
-
-        df_x_scaled, ndarray_x_scaled = self._scale_features(scaler)
-        df_transformed, ndarray_transformed, fitted_transformer = (
-            self._transform_features(
-                transformer=transformer,
-                ndarray_x_scaled=ndarray_x_scaled,
-                column_prefix=column_prefix,
-                n_components=n_components,
-            )
-        )
-        self._plot_transformed_scatter(ndarray_transformed, n_components)
+        transformed = transformer.fit_transform(x_scaled)
+        columns = ["{}{}".format(column_prefix, idx + 1) for idx in range(n_components)]
+        df_transformed = pd.DataFrame(transformed, columns=columns)
+        self._plot_transformed_scatter(transformed, n_components)
         self._plot_component_matrix(
-            transformer=fitted_transformer,
+            transformer=transformer,
             n_components=n_components,
             ylabel=component_ylabel,
         )
-        return (df_x_scaled, df_transformed, fitted_transformer)
+        return (df_x_scaled, df_transformed, transformer)
 
     def plot_pca(self, n_components: int = 2) -> tuple[pd.DataFrame, pd.DataFrame, PCA]:
         """StandardScaler後にPCAを適用し、結果を可視化する。
@@ -879,17 +686,15 @@ class AnalyzeIris:
                 - df_pca (pd.DataFrame): 主成分得点のDataFrame。
                 - pca (PCA): 学習済みのPCAインスタンス。
         """
-        df_x_scaled, df_pca, fitted_transformer = (
-            self._transform_and_plot_components(
-                scaler=StandardScaler(),
-                transformer=PCA(
-                    n_components=n_components,
-                    random_state=RANDOM_STATE,
-                ),
+        df_x_scaled, df_pca, fitted_transformer = self._transform_and_plot_components(
+            scaler_name="StandardScaler",
+            transformer=PCA(
                 n_components=n_components,
-                column_prefix="PC",
-                component_ylabel="PCA components",
-            )
+                random_state=RANDOM_STATE,
+            ),
+            n_components=n_components,
+            column_prefix="PC",
+            component_ylabel="PCA components",
         )
         return (df_x_scaled, df_pca, fitted_transformer)
 
@@ -909,18 +714,16 @@ class AnalyzeIris:
                 - df_nmf (pd.DataFrame): NMFで変換した結果のDataFrame。
                 - nmf (NMF): 学習済みのNMFインスタンス。
         """
-        df_x_scaled, df_nmf, fitted_transformer = (
-            self._transform_and_plot_components(
-                scaler=MinMaxScaler(),
-                transformer=NMF(
-                    n_components=n_components,
-                    random_state=RANDOM_STATE,
-                    max_iter=1000,
-                ),
+        df_x_scaled, df_nmf, fitted_transformer = self._transform_and_plot_components(
+            scaler_name="MinMaxScaler",
+            transformer=NMF(
                 n_components=n_components,
-                column_prefix="NMF",
-                component_ylabel="NMF components",
-            )
+                random_state=RANDOM_STATE,
+                max_iter=1000,
+            ),
+            n_components=n_components,
+            column_prefix="NMF",
+            component_ylabel="NMF components",
         )
         return (df_x_scaled, df_nmf, fitted_transformer)
 
@@ -930,20 +733,20 @@ class AnalyzeIris:
         Notes:
             t-SNEは確率的手法のため、結果は ``RANDOM_STATE`` に依存する。
         """
-        ndarray_target: np.ndarray = self.dataset.target
+        target: np.ndarray = self.dataset.target
 
         tsne = TSNE(n_components=2, random_state=RANDOM_STATE)
-        ndarray_tsne = tsne.fit_transform(self.df_feature)
+        tsne_embedding = tsne.fit_transform(self.df_feature)
 
         plt.figure(figsize=(8, 6))
-        plt.xlim(ndarray_tsne[:, 0].min(), ndarray_tsne[:, 0].max())
-        plt.ylim(ndarray_tsne[:, 1].min(), ndarray_tsne[:, 1].max())
+        plt.xlim(tsne_embedding[:, 0].min(), tsne_embedding[:, 0].max())
+        plt.ylim(tsne_embedding[:, 1].min(), tsne_embedding[:, 1].max())
 
-        for int_idx, str_label in enumerate(ndarray_target.astype(str)):
+        for idx, label in enumerate(target.astype(str)):
             plt.text(
-                ndarray_tsne[int_idx, 0],
-                ndarray_tsne[int_idx, 1],
-                str_label,
+                tsne_embedding[idx, 0],
+                tsne_embedding[idx, 1],
+                label,
                 fontdict={"weight": "bold", "size": 9},
             )
 
@@ -955,6 +758,7 @@ class AnalyzeIris:
         self,
         n_clusters: int | None = None,
         scaling: bool = True,
+        scaler_name: str | None = None,
     ) -> None:
         """KMeans法でクラスタリングし、結果を可視化する。
 
@@ -963,133 +767,72 @@ class AnalyzeIris:
                 クラス数(=3)を使用する。
             scaling (bool): ``True`` の場合はStandardScalerで標準化してから
                 KMeansを適用する。
-
-        Raises:
-            TypeError: ``n_clusters`` が整数以外、または ``scaling`` がbool以外の場合。
-            ValueError: ``n_clusters`` が1未満、またはサンプル数を超える場合。
-        """
-        (
-            kmeans,
-            _,
-            ndarray_cluster_labels,
-            ndarray_pca_points,
-            ndarray_pca_centers,
-        ) = self._fit_k_means_with_projection(
-            n_clusters=n_clusters,
-            scaling=scaling,
-        )
-
-        print("KMeans法で予測したラベル:")
-        print(ndarray_cluster_labels)
-        self._plot_k_means_projection(
-            ndarray_pca_points=ndarray_pca_points,
-            ndarray_labels=ndarray_cluster_labels,
-            ndarray_pca_centers=ndarray_pca_centers,
-            n_groups=kmeans.n_clusters,
-        )
-
-        print("実際のラベル:")
-        print(self.dataset.target)
-        self._plot_k_means_projection(
-            ndarray_pca_points=ndarray_pca_points,
-            ndarray_labels=self.dataset.target,
-            ndarray_pca_centers=ndarray_pca_centers,
-            n_groups=len(self.dataset.target_names),
-        )
-
-    def _fit_k_means_with_projection(
-        self,
-        n_clusters: int | None,
-        scaling: bool,
-    ) -> tuple[KMeans, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """KMeansの学習とPCA座標への射影をまとめて行う。
-
-        Args:
-            n_clusters (int | None): クラスタ数。``None`` の場合はIrisの
-                クラス数を使う。
-            scaling (bool): ``True`` の場合はStandardScalerで標準化してから
-                KMeansを適用する。
-
-        Returns:
-            tuple[KMeans, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-                学習済みKMeans、特徴量配列、予測ラベル、サンプルのPCA座標、
-                クラスタ中心のPCA座標のタプル。
-
-        Raises:
-            TypeError: ``n_clusters`` が整数以外の場合。
-            ValueError: ``n_clusters`` が1未満、またはサンプル数を超える場合。
+            scaler_name (str | None): ``DEFAULT_SCALERS`` のキーを指定すると、
+                ``scaling`` より優先してそのスケーラーを使用する。
         """
         if n_clusters is None:
             n_clusters = len(self.dataset.target_names)
-        self._validate_positive_int(
-            n_clusters,
-            "n_clusters",
-            upper_bound=len(self.df_feature),
-        )
 
-        ndarray_feature = self._get_feature_array(scaling)
+        if scaler_name is None:
+            scaler_name = "StandardScaler" if scaling else "Original"
+        feature_array = self._get_features_by_scaler(scaler_name)
         kmeans = KMeans(
             n_clusters=n_clusters,
             random_state=RANDOM_STATE,
             n_init=10,
         )
-        ndarray_cluster_labels = kmeans.fit_predict(ndarray_feature)
-        ndarray_pca_points = self._get_pca_projection(ndarray_feature)
+        cluster_labels = kmeans.fit_predict(feature_array)
 
-        pca_for_centers = PCA(n_components=2, random_state=RANDOM_STATE)
-        pca_for_centers.fit(ndarray_feature)
-        ndarray_pca_centers = pca_for_centers.transform(kmeans.cluster_centers_)
-        return (
-            kmeans,
-            ndarray_feature,
-            ndarray_cluster_labels,
-            ndarray_pca_points,
-            ndarray_pca_centers,
-        )
+        pca = PCA(n_components=2, random_state=RANDOM_STATE)
+        pca_points = pca.fit_transform(feature_array)
+        pca_centers = pca.transform(kmeans.cluster_centers_)
 
-    def _plot_k_means_projection(
-        self,
-        ndarray_pca_points: np.ndarray,
-        ndarray_labels: np.ndarray,
-        ndarray_pca_centers: np.ndarray,
-        n_groups: int,
-    ) -> None:
-        """PCA空間上にクラスタまたは正解ラベルを散布図で描画する。
+        print("KMeans法で予測したラベル:")
+        print(cluster_labels)
+        print()
+        print("実際のラベル:")
+        print(self.dataset.target)
 
-        Args:
-            ndarray_pca_points (np.ndarray): サンプルのPCA座標。
-            ndarray_labels (np.ndarray): 各サンプルに対応するラベル配列。
-            ndarray_pca_centers (np.ndarray): クラスタ中心のPCA座標。
-            n_groups (int): 描画対象のグループ数。
-        """
-        list_colors = ["blue", "red", "green"]
-        list_markers = ["o", "^", "v"]
+        colors = ["blue", "red", "green"]
+        markers = ["o", "^", "v"]
+        plot_settings = [
+            ("KMeans labels", cluster_labels, kmeans.n_clusters),
+            ("True labels", self.dataset.target, len(self.dataset.target_names)),
+        ]
 
-        plt.figure(figsize=(8, 6))
-        for int_label in range(n_groups):
-            ndarray_label_mask = ndarray_labels == int_label
-            plt.scatter(
-                ndarray_pca_points[ndarray_label_mask, 0],
-                ndarray_pca_points[ndarray_label_mask, 1],
-                c=list_colors[int_label % len(list_colors)],
-                marker=list_markers[int_label % len(list_markers)],
-                s=60,
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        for ax, (title, labels, group_count) in zip(
+            axes,
+            plot_settings,
+        ):
+            for label_id in range(group_count):
+                label_mask = labels == label_id
+                ax.scatter(
+                    pca_points[label_mask, 0],
+                    pca_points[label_mask, 1],
+                    c=colors[label_id],
+                    marker=markers[label_id],
+                    s=60,
+                )
+            ax.scatter(
+                pca_centers[:, 0],
+                pca_centers[:, 1],
+                c="black",
+                marker="*",
+                s=400,
             )
-        plt.scatter(
-            ndarray_pca_centers[:, 0],
-            ndarray_pca_centers[:, 1],
-            c="black",
-            marker="*",
-            s=400,
-        )
-        plt.xlabel("First principal component")
-        plt.ylabel("Second principal component")
+            ax.set_title(title)
+            ax.set_xlabel("First principal component")
+            ax.set_ylabel("Second principal component")
+
+        fig.tight_layout()
         plt.show()
 
     def plot_dendrogram(
         self,
         truncate: bool = False,
         scaling: bool = True,
+        scaler_name: str | None = None,
     ) -> None:
         """凝集型階層クラスタリングのデンドログラムを表示する。
 
@@ -1097,27 +840,25 @@ class AnalyzeIris:
             truncate (bool): ``True`` の場合は上位の枝のみを表示する。
             scaling (bool): ``True`` の場合はStandardScalerで標準化してから
                 linkageを計算する。
-
-        Raises:
-            TypeError: ``truncate`` または ``scaling`` がbool以外の場合。
+            scaler_name (str | None): ``DEFAULT_SCALERS`` のキーを指定すると、
+                ``scaling`` より優先してそのスケーラーを使用する。
         """
-        self._validate_bool(truncate, "truncate")
-        self._validate_bool(scaling, "scaling")
-
-        ndarray_feature = self._get_feature_array(scaling)
-        ndarray_linkage = linkage(ndarray_feature, method="ward")
+        if scaler_name is None:
+            scaler_name = "StandardScaler" if scaling else "Original"
+        feature_array = self._get_features_by_scaler(scaler_name)
+        linkage_matrix = linkage(feature_array, method="ward")
 
         plt.figure(figsize=(10, 6))
         if truncate:
             dendrogram(
-                ndarray_linkage,
+                linkage_matrix,
                 truncate_mode="lastp",
                 p=10,
                 show_leaf_counts=True,
                 leaf_rotation=90,
             )
         else:
-            dendrogram(ndarray_linkage)
+            dendrogram(linkage_matrix)
         plt.show()
 
     def plot_dbscan(
@@ -1125,6 +866,7 @@ class AnalyzeIris:
         scaling: bool = False,
         eps: float = 0.5,
         min_samples: int = 5,
+        scaler_name: str | None = None,
     ) -> None:
         """DBSCANでクラスタリングし、結果を可視化する。
 
@@ -1133,40 +875,158 @@ class AnalyzeIris:
                 DBSCANを適用する。
             eps (float): 近傍とみなす距離の上限。
             min_samples (int): コア点とみなすための近傍サンプル数。
-
-        Raises:
-            TypeError: ``scaling`` がbool以外、``eps`` が数値以外、
-                ``min_samples`` が整数以外の場合。
-            ValueError: ``eps`` が0以下、または ``min_samples`` が1未満の場合。
+            scaler_name (str | None): ``DEFAULT_SCALERS`` のキーを指定すると、
+                ``scaling`` より優先してそのスケーラーを使用する。
         """
-        self._validate_bool(scaling, "scaling")
-        self._validate_positive_number(eps, "eps")
-        self._validate_positive_int(min_samples, "min_samples")
-
-        ndarray_feature = self._get_feature_array(scaling)
+        if scaler_name is None:
+            scaler_name = "StandardScaler" if scaling else "Original"
+        feature_array = self._get_features_by_scaler(scaler_name)
         dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-        ndarray_cluster = dbscan.fit_predict(ndarray_feature)
+        cluster_labels = dbscan.fit_predict(feature_array)
 
-        list_colors = {
-            -1: "blue",
-            0: "red",
-            1: "lime",
-            2: "orange",
-            3: "purple",
-        }
-        list_point_colors = [
-            list_colors.get(int_cluster, "gray") for int_cluster in ndarray_cluster
+        point_colors = [
+            DBSCAN_COLORS.get(cluster, "gray") for cluster in cluster_labels
         ]
 
+        x_feature_index = 2
+        y_feature_index = 3
         plt.figure(figsize=(8, 6))
         plt.scatter(
-            ndarray_feature[:, 2],
-            ndarray_feature[:, 3],
-            c=list_point_colors,
+            feature_array[:, x_feature_index],
+            feature_array[:, y_feature_index],
+            c=point_colors,
             s=60,
         )
-        plt.xlabel("Feature 2")
-        plt.ylabel("Feature 3")
+        plt.xlabel(self.df_feature.columns[x_feature_index])
+        plt.ylabel(self.df_feature.columns[y_feature_index])
         plt.show()
 
-        print("Cluster Memberships:", ndarray_cluster)
+        print("Cluster Memberships:", cluster_labels)
+
+    def compare_dbscan(
+        self,
+        scaling: bool = False,
+        eps: float = 0.5,
+        min_samples: int = 5,
+        scaler_name: str | None = None,
+    ) -> None:
+        """DBSCANのクラスタと正解ラベルを同じ形式の図で比較する。
+
+        Args:
+            scaling (bool): ``True`` の場合はStandardScalerで標準化してから
+                DBSCANを適用する。
+            eps (float): 近傍とみなす距離の上限。
+            min_samples (int): コア点とみなすための近傍サンプル数。
+            scaler_name (str | None): ``DEFAULT_SCALERS`` のキーを指定すると、
+                ``scaling`` より優先してそのスケーラーを使用する。
+        """
+        if scaler_name is None:
+            scaler_name = "StandardScaler" if scaling else "Original"
+        feature_array = self._get_features_by_scaler(scaler_name)
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+        cluster_labels = dbscan.fit_predict(feature_array)
+
+        cluster_colors = [
+            DBSCAN_COLORS.get(cluster, "gray") for cluster in cluster_labels
+        ]
+        target_colors = [
+            DBSCAN_COLORS.get(label, "gray") for label in self.dataset.target
+        ]
+
+        x_feature_index = 2
+        y_feature_index = 3
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
+        plot_settings = [
+            ("DBSCAN clusters", cluster_colors),
+            ("True labels", target_colors),
+        ]
+        for ax, (title, colors) in zip(axes, plot_settings):
+            ax.scatter(
+                feature_array[:, x_feature_index],
+                feature_array[:, y_feature_index],
+                c=colors,
+                s=60,
+            )
+            ax.set_title(title)
+            ax.set_xlabel(self.df_feature.columns[x_feature_index])
+            ax.set_ylabel(self.df_feature.columns[y_feature_index])
+
+        fig.tight_layout()
+        plt.show()
+
+    def plot_dbscan_parameter_grid(
+        self,
+        eps_values: Sequence[float] | None = None,
+        min_samples_values: Sequence[int] | None = None,
+        scaling: bool = True,
+        scaler_name: str | None = None,
+    ) -> None:
+        """DBSCANのepsとmin_samplesを変えた結果をグリッド表示する。
+
+        Args:
+            eps_values (Sequence[float] | None): 比較するepsの値。``None`` の
+                場合は4種類のデフォルト値を使用する。
+            min_samples_values (Sequence[int] | None): 比較するmin_samplesの値。
+                ``None`` の場合は4種類のデフォルト値を使用する。
+            scaling (bool): ``True`` の場合はStandardScalerで標準化してから
+                DBSCANを適用する。
+            scaler_name (str | None): ``DEFAULT_SCALERS`` のキーを指定すると、
+                ``scaling`` より優先してそのスケーラーを使用する。
+        """
+        if eps_values is None:
+            eps_values = (0.3, 0.5, 0.7)
+        if min_samples_values is None:
+            min_samples_values = (3, 5, 7)
+        if scaler_name is None:
+            scaler_name = "StandardScaler" if scaling else "Original"
+
+        feature_array = self._get_features_by_scaler(scaler_name)
+        fig, axes = plt.subplots(
+            len(min_samples_values),
+            len(eps_values),
+            figsize=(16, 16),
+            sharex=True,
+            sharey=True,
+        )
+
+        x_feature_index = 2
+        y_feature_index = 3
+        for row_idx, min_samples in enumerate(min_samples_values):
+            for col_idx, eps in enumerate(eps_values):
+                ax = axes[row_idx, col_idx]
+                dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                cluster_labels = dbscan.fit_predict(feature_array)
+                point_colors = [
+                    DBSCAN_COLORS.get(cluster, "gray") for cluster in cluster_labels
+                ]
+
+                unique_labels = set(cluster_labels)
+                cluster_count = len(unique_labels) - (1 if -1 in unique_labels else 0)
+                noise_count = int(np.sum(cluster_labels == -1))
+
+                ax.scatter(
+                    feature_array[:, x_feature_index],
+                    feature_array[:, y_feature_index],
+                    c=point_colors,
+                    s=35,
+                )
+                ax.set_title(
+                    "eps={}, min_samples={}\nclusters={}, noise={}".format(
+                        eps,
+                        min_samples,
+                        cluster_count,
+                        noise_count,
+                    ),
+                    fontsize=10,
+                )
+                if row_idx == len(min_samples_values) - 1:
+                    ax.set_xlabel(self.df_feature.columns[x_feature_index])
+                if col_idx == 0:
+                    ax.set_ylabel(self.df_feature.columns[y_feature_index])
+
+        fig.suptitle(
+            "DBSCAN parameter comparison (scaler={})".format(scaler_name),
+            fontsize=14,
+        )
+        fig.tight_layout(rect=(0, 0, 1, 0.96))
+        plt.show()
