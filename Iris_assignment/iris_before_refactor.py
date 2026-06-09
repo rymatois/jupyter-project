@@ -31,7 +31,6 @@ from sklearn.decomposition import NMF, PCA
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.manifold import TSNE
-from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
@@ -235,40 +234,6 @@ class AnalyzeIris:
         """
         pca = PCA(n_components=2, random_state=RANDOM_STATE)
         return pca.fit_transform(ndarray_feature)
-
-    def _calc_cluster_summary(
-        self,
-        str_method_name: str,
-        ndarray_feature: np.ndarray,
-        ndarray_cluster: np.ndarray,
-    ) -> dict[str, Any]:
-        """クラスタリング結果の要約指標を計算する。
-
-        Args:
-            str_method_name (str): 手法名。
-            ndarray_feature (np.ndarray): クラスタリングに使った特徴量配列。
-            ndarray_cluster (np.ndarray): 推定クラスタラベル。
-
-        Returns:
-            dict[str, Any]: クラスタ数、ノイズ数、ARI、シルエット係数。
-        """
-        set_labels = set(ndarray_cluster)
-        int_noise_count = int(np.sum(ndarray_cluster == -1))
-        int_cluster_count = len(set_labels) - (1 if -1 in set_labels else 0)
-
-        float_silhouette: float | None = None
-        if len(set_labels) >= 2 and len(set_labels) < len(ndarray_cluster):
-            float_silhouette = float(silhouette_score(ndarray_feature, ndarray_cluster))
-
-        return {
-            "method": str_method_name,
-            "n_clusters": int_cluster_count,
-            "n_noise": int_noise_count,
-            "adjusted_rand_score": float(
-                adjusted_rand_score(self.dataset.target, ndarray_cluster)
-            ),
-            "silhouette_score": float_silhouette,
-        }
 
     def get(self, head: int | None = None) -> pd.DataFrame:
         """ラベル列を付加したDataFrameを返す。
@@ -879,17 +844,15 @@ class AnalyzeIris:
                 - df_pca (pd.DataFrame): 主成分得点のDataFrame。
                 - pca (PCA): 学習済みのPCAインスタンス。
         """
-        df_x_scaled, df_pca, fitted_transformer = (
-            self._transform_and_plot_components(
-                scaler=StandardScaler(),
-                transformer=PCA(
-                    n_components=n_components,
-                    random_state=RANDOM_STATE,
-                ),
+        df_x_scaled, df_pca, fitted_transformer = self._transform_and_plot_components(
+            scaler=StandardScaler(),
+            transformer=PCA(
                 n_components=n_components,
-                column_prefix="PC",
-                component_ylabel="PCA components",
-            )
+                random_state=RANDOM_STATE,
+            ),
+            n_components=n_components,
+            column_prefix="PC",
+            component_ylabel="PCA components",
         )
         return (df_x_scaled, df_pca, fitted_transformer)
 
@@ -909,18 +872,16 @@ class AnalyzeIris:
                 - df_nmf (pd.DataFrame): NMFで変換した結果のDataFrame。
                 - nmf (NMF): 学習済みのNMFインスタンス。
         """
-        df_x_scaled, df_nmf, fitted_transformer = (
-            self._transform_and_plot_components(
-                scaler=MinMaxScaler(),
-                transformer=NMF(
-                    n_components=n_components,
-                    random_state=RANDOM_STATE,
-                    max_iter=1000,
-                ),
+        df_x_scaled, df_nmf, fitted_transformer = self._transform_and_plot_components(
+            scaler=MinMaxScaler(),
+            transformer=NMF(
                 n_components=n_components,
-                column_prefix="NMF",
-                component_ylabel="NMF components",
-            )
+                random_state=RANDOM_STATE,
+                max_iter=1000,
+            ),
+            n_components=n_components,
+            column_prefix="NMF",
+            component_ylabel="NMF components",
         )
         return (df_x_scaled, df_nmf, fitted_transformer)
 

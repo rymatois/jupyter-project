@@ -33,7 +33,6 @@ from sklearn.decomposition import NMF, PCA
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.manifold import TSNE
-from sklearn.metrics import adjusted_rand_score, silhouette_score
 from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
@@ -135,40 +134,6 @@ class AnalyzeIris:
         if scaler is None:
             return self.df_feature.to_numpy()
         return clone(scaler).fit_transform(self.df_feature)
-
-    def _calc_cluster_summary(
-        self,
-        method_name: str,
-        feature_array: np.ndarray,
-        cluster_labels: np.ndarray,
-    ) -> dict[str, Any]:
-        """クラスタリング結果の要約指標を計算する。
-
-        Args:
-            method_name (str): 手法名。
-            feature_array (np.ndarray): クラスタリングに使った特徴量配列。
-            cluster_labels (np.ndarray): 推定クラスタラベル。
-
-        Returns:
-            dict[str, Any]: クラスタ数、ノイズ数、ARI、シルエット係数。
-        """
-        unique_labels = set(cluster_labels)
-        noise_count = int(np.sum(cluster_labels == -1))
-        cluster_count = len(unique_labels) - (1 if -1 in unique_labels else 0)
-
-        silhouette: float | None = None
-        if len(unique_labels) >= 2 and len(unique_labels) < len(cluster_labels):
-            silhouette = float(silhouette_score(feature_array, cluster_labels))
-
-        return {
-            "method": method_name,
-            "n_clusters": cluster_count,
-            "n_noise": noise_count,
-            "adjusted_rand_score": float(
-                adjusted_rand_score(self.dataset.target, cluster_labels)
-            ),
-            "silhouette_score": silhouette,
-        }
 
     def get(self, head: int | None = None) -> pd.DataFrame:
         """ラベル列を付加したDataFrameを返す。
@@ -974,9 +939,9 @@ class AnalyzeIris:
                 ``scaling`` より優先してそのスケーラーを使用する。
         """
         if eps_values is None:
-            eps_values = (0.3, 0.5, 0.7)
+            eps_values = (0.3, 0.4, 0.5)
         if min_samples_values is None:
-            min_samples_values = (3, 5, 7)
+            min_samples_values = (3, 5, 6)
         if scaler_name is None:
             scaler_name = "StandardScaler" if scaling else "Original"
 
